@@ -5,7 +5,7 @@ from tensorflow.keras import utils
 from tensorflow.keras.models import Model
 
 from keras import initializers, regularizers
-
+from keras import backend as K
 import numpy as np
 
 
@@ -103,9 +103,57 @@ def main():
 
     controllerObj = Controller(num_middle_nodes=5, num_op=5)
 
-    controller = controllerObj.generateController()
+    #controller = controllerObj.generateController()
 
-    #utils.plot_model(controller)
+    model = controllerObj.generateController()
+
+
+    exit()
+
+    test=None
+    inp = None
+    i=0
+    for layer in model.layers:
+        if(layer.__class__.__name__ == 'Dense'):
+            
+            if(i==0):
+                test = np.random.random((1,1,))[np.newaxis,...]
+            else:
+                test = [[[res]]]
+
+            test = np.random.random((1,1,))[np.newaxis,...]
+            #print("test")
+            #print(test)
+            inp = model.input
+            out = layer.output
+            res = K.function([inp], [out])([test])
+
+            print(res)
+            # print(res)
+            # print(np.argmax(res))
+            # print(inp.shape)
+            i+=1
+
+            if(i>4):
+                break
+            #exit()
+
+    exit()
+
+    functors = [K.function([inp], [out]) for out in outputs]    # evaluation functions
+
+    # Testing
+    test = np.random.random((1,1,))[np.newaxis,...]
+    layer_outs = [func([test]) for func in functors]
+    print(layer_outs)
+
+
+
+    exit()
+
+
+    utils.plot_model(controller)
+
 
 
     steps = controller.predict([3])
@@ -115,32 +163,6 @@ def main():
     for step in steps:
         #print(step)
         print(np.argmax(step))
-
-
-
-
-    #
-    #   RECONSTITUER ANSARI !!!
-    #
-    #
-    #       
-    #       When same input then as if block with one input and one operation
-    #
-    #             
-    #       classes = ["Conv2D_2_10", "Conv2D_1_5", "Conv2D_4_1", "MaxPooling2D_2", "MaxPooling2D_1_6"]
-    #
-    #
-    #
-    #
-    #
-    #
-
-
-
-
-
-
-
 
 
 

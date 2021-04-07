@@ -29,17 +29,26 @@ class Block():
         self.inputs = inputs
 
     #@tf.function
-    def construct(self):
+    def construct(self,i):
 
 
         # TO be defined elsewhere
         all_layers = [
-                layers.Conv2D(10, (2, 10), padding="same", activation='relu'),
-                layers.Conv2D(10, (1, 5), padding="same", activation='relu'), 
-                layers.Conv2D(10, (4, 1), padding="same", activation='relu'),
-                layers.Conv2D(10, (8, 1), padding="same", activation='relu'), 
-                layers.Conv2D(10, (1, 900), padding="same", activation='relu'), 
+                layers.Conv2D( 10, (2, 10), padding="same", activation='relu', name="2_10__block"+str(int(i/4)) ),
+                layers.Conv2D( 10, (1, 5), padding="same", activation='relu', name="1_5__block"+str(int(i/4)) ), 
+                layers.Conv2D( 10, (4, 1), padding="same", activation='relu', name="4_1__block"+str(int(i/4)) ),
+                layers.Conv2D( 10, (8, 1), padding="same", activation='relu', name="8_1__block"+str(int(i/4)) ), 
+                layers.Conv2D( 10, (1, 900), padding="same", activation='relu', name="1_900__block"+str(int(i/4)) ),
             ]
+
+        all_layers2 = [
+                layers.Conv2D( 10, (2, 10), padding="same", activation='relu', name="2_10__block"+str(int(i/4))+"__2" ),
+                layers.Conv2D( 10, (1, 5), padding="same", activation='relu', name="1_5__block"+str(int(i/4))+"__2" ), 
+                layers.Conv2D( 10, (4, 1), padding="same", activation='relu', name="4_1__block"+str(int(i/4))+"__2" ),
+                layers.Conv2D( 10, (8, 1), padding="same", activation='relu', name="8_1__block"+str(int(i/4))+"__2" ), 
+                layers.Conv2D( 10, (1, 900), padding="same", activation='relu', name="1_900__block"+str(int(i/4))+"__2" ),
+            ]
+
 
         if(self.comb == 'add'):
             self.comb = layers.Add()
@@ -52,7 +61,7 @@ class Block():
         elif(self.input1 == self.input2 and self.op1 == self.op2): # if inputs and ops same, as if block with one input and one op
             self.output = (all_layers[self.op2])(self.inputs[self.input2])
         else: # normal construction (2 inputs, 2 ops)
-            self.output = (self.comb)([(all_layers[self.op1])(self.inputs[self.input1]), (all_layers[self.op2])(self.inputs[self.input2])])
+            self.output = (self.comb)([(all_layers[self.op1])(self.inputs[self.input1]), (all_layers2[self.op2])(self.inputs[self.input2])])
 
         #print(self.output)
 
