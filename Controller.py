@@ -37,7 +37,7 @@ class Controller():
             #print(inputs)
             x = layers.LSTM(self.num_units, return_state=True)(reshaped_inputs, initial_state=inputs[1:])
         
-
+        #
         rx = layers.Reshape((-1, self.num_units),)(x[0])
 
         y = layers.Dense(num_classes, activation="softmax")(x[0])
