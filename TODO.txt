@@ -1,0 +1,13 @@
+- add the Embedding Layer AFTER the Lambda/Sampling layer (test on test.py)			DONE
+
+- reformate the Controller Class to the new version (change in Controller.py)		DONE
+
+	- remove the last Embedding layer of the controller (we just need the Sample layer for the last choice)
+
+- Training Loop (coding it in Controller.py main() function)
+
+	- at every batch/feedforward
+
+			- retrieve output of each softmax + Sample								DONE
+
+			- compute gradient of the proba .. NearlyDONE..
