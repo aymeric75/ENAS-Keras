@@ -184,22 +184,31 @@ def main():
 
     n = 5 # number of arch to sample (= size of the batch ?)
 
-    train_dataset = [[1] for i in range(n)] # len =  number of arch to sample
+    #train_dataset = [[1] for i in range(n)] # len =  number of arch to sample
 
 
 
     epochs = 1
 
+    sampling_number = 5
+
+    sum_over_choices = 0
 
 
 
-    # Loop over the epochs (Unnecessary, to remove!)
+    optimizer = keras.optimizers.SGD(learning_rate=1e-3)
+
+
+    # Loop over the epochs
     for epoch in range(epochs):
 
 
+        sum_over_samples = 0
 
-        # Loop over the 
-        for step, (x_batch_train) in enumerate(train_dataset):
+        # Loop over the number of samplings
+        for s in range(sampling_number):
+
+            sum_over_samples += sum_over_choices
 
             with tf.GradientTape(persistent=True) as tape:
 
@@ -214,7 +223,7 @@ def main():
 
 
                 # sum over the hyperparameters (i.e, over the choices made my the RNN)
-                sum_choices = 0
+                sum_over_choices = 0
 
 
                 # final array of all blocks/cells
@@ -242,7 +251,7 @@ def main():
 
                     # Proba of having chosen class 'classe' knowing the previous choices
                     proba = layer_outs[i][0][0][layer_outs[i+1][0][0]]
-                    log_proba = np.log(proba)
+                    log_proba = tf.math.log(proba)
                     #grad = tape.gradient(tf.convert_to_tensor(proba.item()), controller.trainable_weights)
 
 
@@ -327,8 +336,10 @@ def main():
                 callback = tf.keras.callbacks.EarlyStopping(monitor='accuracy', patience=1) #min_delta=0.1,
 
                 loaded = load_data("data_conv_training.mat", "data_conv_testing.mat",clip_value=300)
-                X_train = loaded[0].transpose((0,2,1)) # eeg training
-                y_train = loaded[1]
+
+                # Here we take only the 50 1st examples
+                X_train = loaded[0].transpose((0,2,1))[:50] # eeg training
+                y_train = loaded[1][:50]
                 y_train = keras.utils.to_categorical(y_train, num_classes=2)
 
 
@@ -344,15 +355,25 @@ def main():
 
                 #loss = history.history['loss']
 
-                val_acc = history.history['val_accuracy']
+                val_acc = history.history['val_accuracy'][-1]
+
+                val_acc = tf.constant(val_acc)
+
+                print(type(val_acc))
+
+                # tf.convert_to_tensor
+
+                grad_log_proba = tape.gradient(log_proba, controller.trainable_weights)
+
+                sum_over_choices += grad_log_proba * val_acc
 
 
-                print("val_acc")
-                print(val_acc)
-                
 
-                
-                break
+        grads = tf.convert_to_tensor(sum_over_samples/sampling_number)
+
+        optimizer.apply_gradients(zip(grads, controller.trainable_weights))
+
+
 
 if __name__ == "__main__":
 
