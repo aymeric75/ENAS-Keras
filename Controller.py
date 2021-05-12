@@ -166,15 +166,18 @@ def main():
     # Controller Instanciation
     ##########################
 
-    num_block_conv=3
+    num_block_conv=4
     num_block_reduc=2
 
-    num_alt=2
+    num_alt=3
     # num_op = 5  <=====> classes = ["Conv2D_2_10", "Conv2D_1_5", "Conv2D_4_1", "MaxPooling2D_2", "MaxPooling2D_1_6"]
 
     controllerInst = Controller(num_block_conv=num_block_conv, num_block_reduc=num_block_reduc, num_op_conv=5, num_op_reduc=2, num_alt=num_alt)
     controller = controllerInst.generateController()
     utils.plot_model(controller, to_file="controller_example2.png")
+
+
+    print("controllerInst.num_block_conv "+str(controllerInst.num_block_conv))
 
 
     ###############
@@ -184,16 +187,11 @@ def main():
 
     n = 5 # number of arch to sample (= size of the batch ?)
 
-    #train_dataset = [[1] for i in range(n)] # len =  number of arch to sample
-
-
-
     epochs = 1
 
-    sampling_number = 5
+    sampling_number = 5 # number of arch child to sample at each epoch
 
-    sum_over_choices = 0
-
+    sum_over_choices = 0 # outer sum of the policy gradient
 
 
     optimizer = keras.optimizers.SGD(learning_rate=1e-3)
@@ -203,7 +201,7 @@ def main():
     for epoch in range(epochs):
 
 
-        sum_over_samples = 0
+        sum_over_samples = 0 # inner sum of the policy gradient
 
         # Loop over the number of samplings
         for s in range(sampling_number):
@@ -211,7 +209,6 @@ def main():
             sum_over_samples += sum_over_choices
 
             with tf.GradientTape(persistent=True) as tape:
-
 
                 # FEEDFORWARD
                 inp = controller.input  # input placeholder
@@ -255,11 +252,17 @@ def main():
                     #grad = tape.gradient(tf.convert_to_tensor(proba.item()), controller.trainable_weights)
 
 
+                    # num_block_conv=3
+                    # num_block_reduc=2
+
+                    # num_alt=2
+
+
                     # when layer is for a convCell choice
-                    if ( k < 12 ):
+                    if ( k < num_block_conv*4 ):
                         cell1.append(classe)
                         #print("k: "+str(k)+ " "+str(cell1))
-                        if(k==11):
+                        if(k==(num_block_conv*4-1)):
                             cells_array.append(cell1)
                             cell1=[]
                         k+=1
@@ -267,21 +270,20 @@ def main():
                     # when layer is for a reducCell choice
                     else:
                         cell1=[]
-                        if(u<2):
+                        if(u<num_block_reduc):
                             #print("u: "+str(u))
                             cell2.append(classe)
-                            if(u==1):
+                            if(u==(num_block_reduc-1)):
                                 cells_array.append(cell2)
                                 cell2=[]
                             u+=1
                         else:
                             k=0
                             u=0
-                        if(u==2):
+                        if(u==num_block_reduc):
                             k=0
                             u=0
                     count+=1
-
 
 
 
@@ -302,19 +304,19 @@ def main():
                     if(i>0):
                         outputs = [x]
 
-                    if(i%2==0):
+                    if( i%2==0 ):
 
                         # Conv Cell, cell_inputs must ALWAYS be an array with the possible DIRECT inputs for the cell
                         cell = Cell('conv', cell_inputs=outputs)
                         blocks_array = np.array( arr )
-                        cell.generateCell(blocks_array, 'conv')
+                        cell.generateCell( blocks_array, 'conv', num_cell=i )
                         x = cell.cell_output
 
                     else:
 
                         cell = Cell('reduc', cell_inputs=outputs)
                         blocks_array = np.array( arr )
-                        cell.generateCell(blocks_array, 'reduc')
+                        cell.generateCell(blocks_array, 'reduc', num_cell=i)
                         x = cell.cell_output
 
 
@@ -329,17 +331,18 @@ def main():
                 model = keras.Model(inputs=inputs, outputs=outputss, name="ansari_model")
                 utils.plot_model(model)
 
+
                 # Compute the accuracy
                 loss = keras.losses.CategoricalCrossentropy()
                 model.compile(loss=loss, optimizer=keras.optimizers.Adam(0.1), metrics=['accuracy'])
 
-                callback = tf.keras.callbacks.EarlyStopping(monitor='accuracy', patience=1) #min_delta=0.1,
+                callback = tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=1) #min_delta=0.1,
 
                 loaded = load_data("data_conv_training.mat", "data_conv_testing.mat",clip_value=300)
 
                 # Here we take only the 50 1st examples
-                X_train = loaded[0].transpose((0,2,1))[:50] # eeg training
-                y_train = loaded[1][:50]
+                X_train = loaded[0].transpose((0,2,1))[:300] # eeg training
+                y_train = loaded[1][:300]
                 y_train = keras.utils.to_categorical(y_train, num_classes=2)
 
 
@@ -357,22 +360,21 @@ def main():
 
                 val_acc = history.history['val_accuracy'][-1]
 
-                val_acc = tf.constant(val_acc)
-
-                print(type(val_acc))
-
+                log_proba = np.log(log_proba)
                 # tf.convert_to_tensor
 
-                grad_log_proba = tape.gradient(log_proba, controller.trainable_weights)
-
-                sum_over_choices += grad_log_proba * val_acc
+                sum_over_choices = log_proba * val_acc
 
 
 
-        grads = tf.convert_to_tensor(sum_over_samples/sampling_number)
+        grads = sum_over_samples/sampling_number
+
+        grad = tape.gradient(tf.convert_to_tensor(grads), controller.trainable_weights)
 
         optimizer.apply_gradients(zip(grads, controller.trainable_weights))
 
+
+    controller.save_weights("controller_weights.h5")
 
 
 if __name__ == "__main__":

@@ -7,7 +7,7 @@ import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras import layers
 
-
+import random
 
 ###################
 #   Defines a block
@@ -15,9 +15,32 @@ from tensorflow.keras import layers
 
 
 
+
+
+
+
+
+def randomgen():
+
+    random_string = ''
+
+    for i in range(4):
+        # Considering only upper and lowercase letters
+        random_integer = random.randint(97, 97 + 26 - 1)
+        flip_bit = random.randint(0, 1)
+        # Convert to lowercase if the flip bit is on
+        random_integer = random_integer - 32 if flip_bit == 1 else random_integer
+        # Keep appending random characters using chr(x)
+        random_string += (chr(random_integer))
+     
+    return random_string
+
+
+
+
 class Block():
 
-    def __init__(self, name='', input1='', input2='', op1 = '', op2 = '', comb = 'add', output = '', inputs='', cell_type='conv'):
+    def __init__(self, name='', input1='', input2='', op1 = '', op2 = '', comb = 'add', output = '', inputs='', cell_type='conv', name_cell='', num_cell=''):
 
         self.name = name
         self.input1 = input1
@@ -28,6 +51,14 @@ class Block():
         self.output = output
         self.inputs = inputs
         self.cell_type = cell_type
+        self.name_cell = name_cell
+        self.num_cell = num_cell
+
+
+
+
+
+
 
     #@tf.function
     def construct(self):
@@ -35,11 +66,11 @@ class Block():
 
         # TO be defined elsewhere
         conv_layers = [
-                layers.Conv2D(10, (2, 10), padding="same", activation='relu'),
-                layers.Conv2D(10, (1, 5), padding="same", activation='relu'), 
-                layers.Conv2D(10, (4, 1), padding="same", activation='relu'),
-                layers.Conv2D(10, (8, 1), padding="same", activation='relu'),            
-                layers.Conv2D(10, (1, 900), padding="same", activation='relu'), 
+                layers.Conv2D(10, (2, 10), padding="same", activation='relu', name=self.name+"__"+randomgen()),
+                layers.Conv2D(10, (1, 5), padding="same", activation='relu', name=self.name+"__"+randomgen()), 
+                layers.Conv2D(10, (4, 1), padding="same", activation='relu', name=self.name+"__"+randomgen()),
+                layers.Conv2D(10, (8, 1), padding="same", activation='relu', name=self.name+"__"+randomgen()),            
+                layers.Conv2D(10, (1, 900), padding="same", activation='relu', name=self.name+"__"+randomgen()), 
             ]
 
 
@@ -56,7 +87,7 @@ class Block():
 
 
         if(self.comb == 'add'):
-            self.comb = layers.Add()
+            self.comb = layers.Add( name = self.name+"__"+randomgen() )
 
 
         if(self.input1 != None and self.input2 == None): # if input1 set to None, just consider input2
@@ -83,45 +114,7 @@ class Block():
 
 def main():
 
-
-    initializer = keras.initializers.Zeros()
-
-
-
-    input_shape = (8, 900, 1)
-    inputs = keras.Input(shape=(8, 900))
-    x = layers.Reshape((8,900,1))(inputs)
-
-
-    block1 = Block()
-    block1.name = "BatchNorm1"
-    block1.input1 = x
-    block1.input2 = None
-    block1.op1 = layers.BatchNormalization()
-
-
-    block2 = Block()
-    block2.name = "Conv2_1"
-    block2.input1 = block1.output
-    block2.input2 = None
-    block2.op1 = layers.Conv2D( 10, (2, 10), padding="same", activation='relu', input_shape=input_shape[:-1] )
-
-
-    exit()
-
-
-    block3 = Block()
-    block3.name = "MaxPool_1"
-
-    block4 = Block()
-    block4.name = "Conv2_2"
-
-    block5 = Block()
-    block5.name = "Conv2_3"
-
-    block6 = Block()
-    block6.name = "MaxPool_2"
-
+    return 1
 
 
 
