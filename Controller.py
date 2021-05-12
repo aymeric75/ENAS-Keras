@@ -363,7 +363,7 @@ def main():
                 log_proba = np.log(log_proba)
                 # tf.convert_to_tensor
 
-                sum_over_choices = log_proba * val_acc
+                sum_over_choices += log_proba * val_acc
 
 
 
