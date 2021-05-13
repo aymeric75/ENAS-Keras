@@ -10,6 +10,30 @@ from tensorflow.keras.models import Sequential
 import math
 from Cell import Cell
 import scipy.io as sio
+import random
+
+
+
+
+
+
+
+
+class ActivityRegularizationLayer(layers.Layer):
+    def call(self, inputs):
+
+        self.add_loss(inputs)
+        #self.add_loss(1e-2 * tf.reduce_sum(inputs))
+        # proba ET 
+
+        return inputs
+
+
+
+
+
+
+
 
 
 
@@ -79,9 +103,11 @@ class Controller():
         # Name for Dense = size of the softmax + i
         x = layers.Dense(num_classes, activation="softmax", name=str(count)+"-"+type_cell+"-"+str(num_classes))(x[0])
 
+        x = ActivityRegularizationLayer()(x)
+
         x = layers.Lambda(lambda t: sampling(t, depth=num_classes))(x)
 
-        x = layers.Embedding(num_classes, 100)(x)
+        x = layers.Embedding(num_classes, 100, trainable=False)(x)
 
 
         return x # x = LSTM output, rx = reshaped, emb = embedding
@@ -152,7 +178,7 @@ class Controller():
 
 
 
-        model = keras.Model(inputs=controller_input, outputs=outputs)
+        model = Model(inputs=controller_input, outputs=outputs)
 
 
         return model
@@ -177,7 +203,6 @@ def main():
     utils.plot_model(controller, to_file="controller_example2.png")
 
 
-    print("controllerInst.num_block_conv "+str(controllerInst.num_block_conv))
 
 
     ###############
@@ -187,16 +212,16 @@ def main():
 
     n = 5 # number of arch to sample (= size of the batch ?)
 
-    epochs = 5
+    epochs = 1
 
-    sampling_number = 5 # number of arch child to sample at each epoch
+    sampling_number = 5000 # number of arch child to sample at each epoch
 
     sum_over_choices = 0 # outer sum of the policy gradient
 
 
     optimizer = keras.optimizers.SGD(learning_rate=1e-3)
 
-    loss_fn = keras.losses.SparseCategoricalCrossentropy(from_logits=True)
+
 
 
     # Loop over the epochs
@@ -208,22 +233,39 @@ def main():
         # Loop over the number of samplings
         for s in range(sampling_number):
 
-            sum_over_samples += sum_over_choices
+            #sum_over_samples += sum_over_choices
 
-            with tf.GradientTape(persistent=True) as tape:
+            with tf.GradientTape(persistent=False) as tape:
 
                 # FEEDFORWARD
                 inp = controller.input  # input placeholder
                 outputs = [layer.output for layer in controller.layers if ( layer.__class__.__name__ == "Dense" or layer.__class__.__name__ == "Lambda" )]  # all layer outputs
                 functor = K.function([inp], outputs )   # evaluation function
                 test = np.random.random((1,1))[np.newaxis,...]
-                layer_outs = functor([test, 1.]) # Here are all the outputs of all the layers
+                layer_outs = functor([test]) # Here are all the outputs of all the layers
+
+                #print(controller.input.shape)
+
+
+                #logits = controller([1], training=True)
 
 
                 # sum over the hyperparameters (i.e, over the choices made my the RNN)
                 sum_over_choices = 0
 
+                # final array of all blocks/cells
+                cells_array = []
 
+                cell1 = [] # tmp array for conv cells
+                cell2 = [] # tmp array for reduc cells
+
+                k=0
+                u=0
+                count=0
+
+
+                #print(controller.losses)
+                
 
                 ###################
                 # MAKING CHILD ARCH
@@ -232,35 +274,62 @@ def main():
                 # loop over each layer (choice)
                 for i in range(0, len(layer_outs), 2):
 
+                    #print("DEBUT")
 
-
-                    # Class that was chosen by the RNN
                     classe = layer_outs[i+1][0][0]
 
-                    # Proba of having chosen class 'classe' knowing the previous choices
-                    proba = layer_outs[i][0][0][layer_outs[i+1][0][0]]
-                    log_proba = tf.math.log(proba)
-                    #grad = tape.gradient(tf.convert_to_tensor(proba.item()), controller.trainable_weights)
+                    proba = controller.losses[int(i/2)][0][0][classe]
+
+                    rew = 99
+
+                    if ( classe == 0 ):
+                        rew = 0.1
+
+
+                    sum_over_choices -= proba*rew
+
+
+                    print(classe)
+
+
+                    # i+1 <=> to the "losses" layer
+
+                    #proba = layer_outs[i+1][0][0][layer_outs[i+2][0][0]]
+
+
+                    
+                    #print(controller.layers[i+2].losses)
+                    #print(layer_outs[i+1].losses)
+
+
+                    # # Class that was chosen by the RNN
+                    
+
+            
+
+                    # DIRE QUE SI CLASSE 0 PARTOUT ALORS REWARD DE 1.2 SINON DE 0.2
+
+                    #   total
 
 
 
-                    sum_over_choices += log_proba
+                    # # Proba of having chosen class 'classe' knowing the previous choices
+                    # proba = layer_outs[i][0][0][layer_outs[i+1][0][0]]
+                    # log_proba = tf.math.log(proba)
+                    # #grad = tape.gradient(tf.convert_to_tensor(proba.item()), controller.trainable_weights)
 
 
-                loss_value = log_proba
-
-               # print(loss_value)
-
+                # log_proba = np.log(log_proba)
+                # sum_over_choices += log_proba * val_acc
 
 
-            grads = tape.gradient(loss_value, controller.trainable_weights)
 
-            print(grads)
+            grads = tape.gradient(sum_over_choices, controller.trainable_weights)
 
-            #optimizer.apply_gradients(zip(grads, controller.trainable_weights))
+            optimizer.apply_gradients(zip(grads, controller.trainable_weights))
 
 
-    controller.save_weights("controller_weights.h5")
+    #controller.save_weights("controller_weights.h5")
 
 
 if __name__ == "__main__":
