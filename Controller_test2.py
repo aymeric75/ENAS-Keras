@@ -222,7 +222,7 @@ def main():
     optimizer = keras.optimizers.SGD(learning_rate=1e-3)
 
 
-
+    counter = 0
 
     # Loop over the epochs
     for epoch in range(epochs):
@@ -235,7 +235,13 @@ def main():
 
             #sum_over_samples += sum_over_choices
 
+
+            counter+=1
+
+
             with tf.GradientTape(persistent=False) as tape:
+
+                sampling_number = 50
 
                 # FEEDFORWARD
                 inp = controller.input  # input placeholder
@@ -251,7 +257,7 @@ def main():
 
 
                 # sum over the hyperparameters (i.e, over the choices made my the RNN)
-                sum_over_choices = 0
+                #sum_over_choices = 0
 
                 # final array of all blocks/cells
                 cells_array = []
@@ -280,16 +286,28 @@ def main():
 
                     proba = controller.losses[int(i/2)][0][0][classe]
 
-                    rew = 99
-
-                    if ( classe == 0 ):
-                        rew = 0.1
+                    rew = 0.2
 
 
-                    sum_over_choices -= proba*rew
+
+                    nb_classes = layer_outs[i][0][0].shape[0]
+
+                    if ( nb_classes == 5 ):
+
+                        if ( classe == 4 ):
+                            rew = 99
+
+                    else:
+
+                        if ( classe == 0 ):
+                            rew = 99
 
 
-                    print(classe)
+                    sum_over_choices -= tf.math.log(proba)*rew
+
+                    #sum_over_choices = tf.divide(sum_over_choices, sampling_number)
+
+                    print(str(classe)+"   "+str(counter))
 
 
                     # i+1 <=> to the "losses" layer
@@ -322,6 +340,7 @@ def main():
                 # log_proba = np.log(log_proba)
                 # sum_over_choices += log_proba * val_acc
 
+        
 
 
             grads = tape.gradient(sum_over_choices, controller.trainable_weights)
