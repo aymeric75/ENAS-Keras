@@ -14,12 +14,6 @@ import random
 ###################
 
 
-
-
-
-
-
-
 def randomgen():
 
     random_string = ''
@@ -56,55 +50,64 @@ class Block():
 
 
 
-
-
-
-
-    #@tf.function
+        
     def construct(self):
 
 
         # TO be defined elsewhere
         conv_layers = [
-                layers.Conv2D(10, (2, 10), padding="same", activation='relu', name=self.name+"__"+randomgen()),
-                layers.Conv2D(10, (1, 5), padding="same", activation='relu', name=self.name+"__"+randomgen()), 
-                layers.Conv2D(10, (4, 1), padding="same", activation='relu', name=self.name+"__"+randomgen()),
-                layers.Conv2D(10, (8, 1), padding="same", activation='relu', name=self.name+"__"+randomgen()),            
-                layers.Conv2D(10, (1, 900), padding="same", activation='relu', name=self.name+"__"+randomgen()), 
+                layers.Conv2D(10, (2, 10), padding="same", activation='relu', name=self.name+"-2_10"),
+                layers.Conv2D(10, (1, 5), padding="same", activation='relu', name=self.name+"-1_5"),
+                layers.Conv2D(10, (4, 1), padding="same", activation='relu', name=self.name+"-4_1"),
+                layers.Conv2D(10, (8, 1), padding="same", activation='relu', name=self.name+"-8_1"),            
+                layers.Conv2D(10, (1, 900), padding="same", activation='relu', name=self.name+"-1_900"),
+            
+                layers.Conv2D(10, (3, 5), dilation_rate=4, padding="same", activation='relu', name=self.name+"-3_5_dl-4"),       
+                layers.Conv2D(10, (2, 5), padding="same", activation='relu', name=self.name+"-2_5")
+              
+          
             ]
 
 
         reduc_layers = [
-            layers.MaxPooling2D(pool_size=(2,2), padding="same"),
-            layers.MaxPooling2D(pool_size=(1, 6), padding="same")
+            layers.MaxPooling2D(pool_size=(2,2), padding="same", name=self.name+"-pool_2_2"),
+            layers.MaxPooling2D(pool_size=(1, 6), padding="same", name=self.name+"-pool_1_6")
         ]
+        
+        the_dropout_layer = None
 
         if ( self.cell_type == 'conv' ):
             the_layers = conv_layers
-
+            the_dropout_layer = layers.Dropout(0.2, name=self.name+"-dropout")
+            the_leaky_layer = layers.LeakyReLU(name=self.name+"-leaky")
         else:
             the_layers = reduc_layers
 
 
         if(self.comb == 'add'):
-            self.comb = layers.Add( name = self.name+"__"+randomgen() )
+            self.comb = layers.Add( name = self.name+"_add" )
 
-
+        
         if(self.input1 != None and self.input2 == None): # if input1 set to None, just consider input2
             self.output = (the_layers[self.op1])(self.inputs[self.input1])
+        
         elif(self.input2 != None and self.input1 == None): # if input2 set to None, just consider input1
             self.output = (the_layers[self.op2])(self.inputs[self.input2])
-        elif(self.input1 == self.input2 and self.op1 == self.op2): # if inputs and ops same, as if block with one input and one op
-            self.output = (the_layers[self.op2])(self.inputs[self.input2])
-        else: # normal construction (2 inputs, 2 ops)
-
-            #print("self.op1 = "+str(self.op1)+"  self.input1 = "+str(self.input1))
-            #print("self.op2 = "+str(self.op2)+"  self.input2 = "+str(self.input2))
-
-            # Reshape input shape of 
-
+         
+        #elif(self.input1 == self.input2 and self.op1 == self.op2): # if inputs and ops same, as if block with one input and one op
+        elif( tf.math.equal(self.input1,self.input2) and tf.math.equal(self.op1, self.op2) ):
+            if ( self.cell_type == 'conv' and self.num_cell%4 != 0 ):
+                self.output = (the_dropout_layer)((the_layers[self.op2])(self.inputs[self.input2]))
+            elif( self.cell_type == 'conv' and self.num_cell%4 == 0 and self.num_cell!=0 ):
+                self.output = (the_leaky_layer)((the_layers[self.op2])(self.inputs[self.input2]))
+            else:
+                self.output = (the_layers[self.op2])(self.inputs[self.input2])
+        else: # 
             #  Reshape()
-            self.output = (self.comb)([(the_layers[self.op1])(self.inputs[self.input1]), (the_layers[self.op2])(self.inputs[self.input2])])
+            if ( self.cell_type == 'conv' ):
+                self.output = (the_dropout_layer)((self.comb)([(the_layers[self.op1])(self.inputs[self.input1]), (the_layers[self.op2])(self.inputs[self.input2])]))
+            else: 
+                self.output = (self.comb)([(the_layers[self.op1])(self.inputs[self.input1]), (the_layers[self.op2])(self.inputs[self.input2])])
 
         #print(self.output)
 
