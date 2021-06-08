@@ -41,31 +41,18 @@ class Cell():
             for i in range(0, len(blocks_array), 4):
 
 
-                #print("i = "+str(i))
-
-                #block_combi = str(blocks_array[i])+"_"+str(blocks_array[i+1])+"_"+str(blocks_array[i+2])+"_"+str(blocks_array[i+3])
-
                 chosen_outputs.append(blocks_array[i])
                 chosen_outputs.append(blocks_array[i+1])
+                
+                block_name = 'cell-'+str(num_cell)+'-block-'+str(int(i/4))+"-"+str(blocks_array[i])+"-"+str(blocks_array[i+1])+"-"+str(blocks_array[i+2])+"-"+str(blocks_array[i+2])
+                
 
-                new_block = Block('cell-'+str(num_cell)+'-block-'+str(int(i/4)), input1=blocks_array[i], input2=blocks_array[i+1], op1=blocks_array[i+2], 
-                    op2=blocks_array[i+3], inputs=outputs, cell_type=self.type_cell, num_cell=num_cell)
+                new_block = Block(block_name, input1=blocks_array[i], input2=blocks_array[i+1], op1=blocks_array[i+2], op2=blocks_array[i+3], inputs=outputs, cell_type=self.type_cell, num_cell=num_cell)
 
                 new_block.construct()
 
-                print('cell-'+str(num_cell)+'-block-'+str(int(i/4)))
 
                 outputs.append(new_block.output)
-
-
-                #  J'ai capté !!!
-
-                # certain blocks sont construits mais ne sont jamais utilisés comme Inputs !!
-
-                #           => DONC tous les blocks qui n'ont pas 
-
-
-                #   
 
         else:
 
