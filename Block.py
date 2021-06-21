@@ -14,6 +14,8 @@ import random
 ###################
 
 
+
+
 def randomgen():
 
     random_string = ''
@@ -57,16 +59,14 @@ class Block():
         # TO be defined elsewhere
         conv_layers = [
                 layers.Conv2D(10, (2, 10), padding="same", activation='relu', name=self.name+"-2_10"),
-                layers.Conv2D(10, (1, 5), padding="same", activation='relu', name=self.name+"-1_5"),
-                layers.Conv2D(10, (4, 1), padding="same", activation='relu', name=self.name+"-4_1"),
+                layers.Conv2D(10, (2, 5), padding="same", activation='relu', name=self.name+"-2_5"),
+                layers.Conv2D(10, (2, 5), dilation_rate=4, padding="same", activation='relu', name=self.name+"-2_5_dl-4"),
+                layers.Conv2D(10, (2, 10), dilation_rate=4, padding="same", activation='relu', name=self.name+"-2_10_dl-4"),
                 layers.Conv2D(10, (8, 1), padding="same", activation='relu', name=self.name+"-8_1"),            
                 layers.Conv2D(10, (1, 900), padding="same", activation='relu', name=self.name+"-1_900"),
-            
-                layers.Conv2D(10, (3, 5), dilation_rate=4, padding="same", activation='relu', name=self.name+"-3_5_dl-4"),       
-                layers.Conv2D(10, (2, 5), padding="same", activation='relu', name=self.name+"-2_5")
-              
-          
-            ]
+                layers.Dropout(0.2, name=self.name+"-dropout"),
+                layers.LeakyReLU(name=self.name+"-leaky")
+        ]
 
 
         reduc_layers = [
@@ -78,8 +78,9 @@ class Block():
 
         if ( self.cell_type == 'conv' ):
             the_layers = conv_layers
-            the_dropout_layer = layers.Dropout(0.2, name=self.name+"-dropout")
-            the_leaky_layer = layers.LeakyReLU(name=self.name+"-leaky")
+            #the_dropout_layer = layers.Dropout(0.2, name=self.name+"-dropout")
+            #the_leaky_layer = layers.LeakyReLU(name=self.name+"-leaky")
+
         else:
             the_layers = reduc_layers
 
@@ -96,17 +97,8 @@ class Block():
          
         #elif(self.input1 == self.input2 and self.op1 == self.op2): # if inputs and ops same, as if block with one input and one op
         elif( tf.math.equal(self.input1,self.input2) and tf.math.equal(self.op1, self.op2) ):
-            if ( self.cell_type == 'conv' and self.num_cell%4 != 0 ):
-                self.output = (the_dropout_layer)((the_layers[self.op2])(self.inputs[self.input2]))
-            elif( self.cell_type == 'conv' and self.num_cell%4 == 0 and self.num_cell!=0 ):
-                self.output = (the_leaky_layer)((the_layers[self.op2])(self.inputs[self.input2]))
-            else:
                 self.output = (the_layers[self.op2])(self.inputs[self.input2])
         else: # 
-            #  Reshape()
-            if ( self.cell_type == 'conv' ):
-                self.output = (the_dropout_layer)((self.comb)([(the_layers[self.op1])(self.inputs[self.input1]), (the_layers[self.op2])(self.inputs[self.input2])]))
-            else: 
                 self.output = (self.comb)([(the_layers[self.op1])(self.inputs[self.input1]), (the_layers[self.op2])(self.inputs[self.input2])])
 
         #print(self.output)

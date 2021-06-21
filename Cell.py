@@ -13,6 +13,7 @@ import numpy as np
 class Cell():
 
 
+
     def __init__(self, type_cell = 'conv', cell_inputs = [], cell_output=''):
 
         self.type_cell = type_cell
@@ -23,6 +24,7 @@ class Cell():
 
     def generateCell(self, blocks_array, type_cell, num_cell):
 
+
         #x = self.cell_input
 
         outputs = self.cell_inputs
@@ -32,20 +34,16 @@ class Cell():
 
         if(self.type_cell=='conv'):
 
-
-            
-
-
-            for i in range(0, len(blocks_array), 4):
+            for i in range(0, len(blocks_array)):
 
 
                 chosen_outputs.append(blocks_array[i])
-                chosen_outputs.append(blocks_array[i+1])
+                #chosen_outputs.append(blocks_array[i+1])
                 
-                block_name = 'cell-'+str(num_cell)+'-block-'+str(int(i/4))+"-"+str(blocks_array[i])+"-"+str(blocks_array[i+1])+"-"+str(blocks_array[i+2])+"-"+str(blocks_array[i+2])
+                block_name = 'cell-'+str(num_cell)+'-block-'+str(int(i))+"-"+str(i)+"-"+str(i)+"-"+str(blocks_array[i])+"-"+str(blocks_array[i])
                 
 
-                new_block = Block(block_name, input1=blocks_array[i], input2=blocks_array[i+1], op1=blocks_array[i+2], op2=blocks_array[i+3], inputs=outputs, cell_type=self.type_cell, num_cell=num_cell)
+                new_block = Block(block_name, input1=i, input2=i, op1=blocks_array[i], op2=blocks_array[i], inputs=outputs, cell_type=self.type_cell, num_cell=num_cell)
 
                 new_block.construct()
 
@@ -69,19 +67,8 @@ class Cell():
 
 
         if(self.type_cell=='conv'):
-
-            # retrieve all unchosen outputs and add them 
-            unchosen_outputs = []
-            for i, out in enumerate(outputs):
-                if (i not in chosen_outputs):
-                    unchosen_outputs.append(out)
-
-            # merge all unplugged outputs
-            if ( len(unchosen_outputs) > 1 ):
-                self.cell_output = layers.Add( name=str(num_cell)+"-all_and_one" )( unchosen_outputs )
-
-            else:
-                self.cell_output = outputs[-1]
+        
+            self.cell_output = outputs[-1]
 
         else:
             # add the add to outputs[-1]

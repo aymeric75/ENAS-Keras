@@ -7,6 +7,7 @@ from keras import initializers, regularizers
 from keras import backend as K
 import numpy as np
 from tensorflow.keras.models import Sequential
+from sklearn import metrics
 import math
 from Cell import Cell
 import scipy.io as sio
@@ -14,19 +15,15 @@ import time
 import tracemalloc
 import os
 from sklearn.model_selection import train_test_split
+from sklearn.model_selection import KFold
 import decimal
 from statistics import mean
 import h5py
-
-
-class ActivityRegularizationLayer(layers.Layer):
-    def call(self, inputs):
-
-        self.add_loss(inputs)
-        #self.add_loss(1e-2 * tf.reduce_sum(inputs))
-        # proba ET 
-
-        return inputs
+import tensorflow_addons as tfa
+import Utils
+from Utils import ActivityRegularizationLayer
+from Utils import moving_average, mvaverage, recall_m, precision_m, f1_m, kappa, truncate_float, duplicate_in_array
+import matplotlib.pyplot as plt
 
 
 def load_data(trainingPath, validationPath, clip_value=300):
@@ -122,27 +119,18 @@ class Controller():
 
                 # for each block/node, we choose 2 inputs and 2 operations
 
-                for o in ["inputL", "inputR", "operL", "operR"]:
+                if i == 0 and j == 0:
+                    _x, _initial = input_cell, True
+                else:
+                    _x, _initial = x, False # output of previous LSTM_softmax
 
-                    if i == 0 and j == 0 and o == "inputL":
-                        _x, _initial = input_cell, True
-                    else:
-                        #_x, _rx, _initial = emb, rx, False # output of previous LSTM_softmax
-                        _x, _initial = x, False # output of previous LSTM_softmax
+                _num_classes = self.num_op_conv
 
-                    if o == "inputL" or o == "inputR" :
-                        # 1 softmax de taille 2 pour inputL et inputR
-                        _num_classes = j+1
-                    else:
-                        # 1 softmax de taille #num_op
-                        _num_classes = self.num_op_conv
+                count+=1
+                x = self.LSTM_softmax(inputs=_x, num_classes=_num_classes, initial=_initial, count=count, type_cell="conv")
+                #x, rx, emb = self.LSTM_softmax(inputs=_x, num_classes=_num_classes, reshaped_inputs=_rx, initial=_initial)
 
-
-                    count+=1
-                    x = self.LSTM_softmax(inputs=_x, num_classes=_num_classes, initial=_initial, count=count, type_cell="conv")
-                    #x, rx, emb = self.LSTM_softmax(inputs=_x, num_classes=_num_classes, reshaped_inputs=_rx, initial=_initial)
-
-                    outputs.append(x)
+                outputs.append(x)
 
 
             # Generate the reduc blocks
@@ -164,7 +152,7 @@ class Controller():
         return model
 
 
-def get_compiled_cnn_model(cells_array, block_names):
+def get_compiled_cnn_model(cells_array):
 
 
     # Init of the child net
@@ -175,10 +163,9 @@ def get_compiled_cnn_model(cells_array, block_names):
     #outputs.append(x)
     x = layers.BatchNormalization(name="outside_batchnorm")(x)
     #outputs.append(x)
-    x = layers.Conv2D(10, (1, 1), padding="same", activation='relu', name="outside_conv2")(x)
-    
+    #x = layers.Conv2D(10, (2, 10), padding="same", activation='relu', name="outside_conv2")(x)
     outputs.append(x)
-    
+
     # loop over the cells and construct the model
     for i, arr in enumerate(cells_array):
 
@@ -211,75 +198,63 @@ def get_compiled_cnn_model(cells_array, block_names):
     outputss = layers.Dense(2, activation='softmax', name="outside_dense2")(x)
     
     model = keras.Model(inputs=inputs, outputs=outputss, name="ansari_model")
-    utils.plot_model(model, to_file="child_ENAS5.png")
+    utils.plot_model(model, to_file="child_ENAS2.png")
 
-
+    # metrics=['acc',f1_m,precision_m, recall_m]
     # Compute the accuracy
+    #acc = tf.keras.metrics.BinaryAccuracy(name="binary_accuracy", dtype=None, threshold=0.3)
     loss = keras.losses.CategoricalCrossentropy()
-    model.compile(loss=loss, optimizer=keras.optimizers.Adam(1e-3), metrics=['accuracy'])
+    model.compile(loss=loss, optimizer=keras.optimizers.Adam(1e-3), metrics=["accuracy", f1_m, precision_m, recall_m,tfa.metrics.CohenKappa(num_classes=2)])
     
     return model
 
 
 
-def moving_average(x, n, type='simple'):
-    """
-    compute an n period moving average.
 
-    type is 'simple' | 'exponential'
+def make_dataset(X_data,y_data,n_splits):
 
-    """
-    x = np.asarray(x)
-    if type == 'simple':
-        weights = np.ones(n)
-    else:
-        weights = np.exp(np.linspace(-1., 0., n))
+    def gen():
+        for train_index, test_index in KFold(n_splits).split(X_data):
+            X_train, X_test = X_data[train_index], X_data[test_index]
+            y_train, y_test = y_data[train_index], y_data[test_index]
+            yield X_train,y_train,X_test,y_test
 
-    weights /= weights.sum()
+    return tf.data.Dataset.from_generator(gen, (tf.float64,tf.float64,tf.float64,tf.float64))
 
-    a = np.convolve(x, weights, mode='full')[:len(x)]
-    a[:n] = a[n]
-    return mean(a)
-
-
-
-def truncate_float(number, length):
-    """Truncate float numbers, up to the number specified
-    in length that must be an integer"""
-
-    number = number * pow(10, length)
-    number = int(number)
-    number = float(number)
-    number /= pow(10, length)
-    return number
-
-
-def duplicate_in_array(array, decimals):
-    decimal.getcontext().rounding = decimal.ROUND_DOWN
-    for i in range(len(array)):
-        if ( i < (len(array)-1) ):
-            if(truncate_float(array[i], decimals) == truncate_float(array[i+1], decimals)):
-                return True
-    return False
 
 
 
 def main():
 
     tracemalloc.start()
-
+    
     loaded = load_data("../../../../data_conv_training.mat", "../../../../data_conv_testing.mat",clip_value=300)
 
     # Here we take only the 50 1st examples
     X = loaded[0].transpose((0,2,1)) # eeg training
     y = loaded[1]
+    
     y = keras.utils.to_categorical(y, num_classes=2)
+
+    
+    
+    
+    """
+    cells_array = [[0], [0]]
+    model = get_compiled_cnn_model(cells_array)
+    
+    for i in range(50):
+        print(model(X[i][np.newaxis,...]))
+    for i in range(50):
+        print(model.predict(X[i][np.newaxis,...]))
+    
+    """
 
     
     # Init data option & disable AutoShard.
     options = tf.data.Options()
     options.experimental_distribute.auto_shard_policy = tf.data.experimental.AutoShardPolicy.OFF
-
+    
     ##########################
     # Controller Instanciation
     ##########################
@@ -290,7 +265,7 @@ def main():
     num_alt=2
 
 
-    controllerInst = Controller(num_block_conv=num_block_conv, num_block_reduc=num_block_reduc, num_op_conv=7, num_op_reduc=2, num_alt=num_alt)
+    controllerInst = Controller(num_block_conv=num_block_conv, num_block_reduc=num_block_reduc, num_op_conv=8, num_op_reduc=2, num_alt=num_alt)
     controller = controllerInst.generateController()
     #utils.plot_model(controller, to_file="controller_example2.png")
 
@@ -300,8 +275,9 @@ def main():
     ###############
 
 
-    epochs = 9999999
-
+    epochs = 5
+    
+    
     sampling_number = 1 # number of arch child to sample at each epoch
 
     sum_over_choices = 0 # outer sum of the policy gradient
@@ -315,19 +291,17 @@ def main():
     strategy = tf.distribute.MirroredStrategy()
     print('Number of devices: {}'.format(strategy.num_replicas_in_sync))
 
-    all_ones = 0
-    all_convs = 0
-    block_names = []
     
-    total_weights = h5py.File("total_weights.h5", "w")
+    #total_weights = h5py.File("total_weights.h5", "w")
     
     
     start = time.time()
 
+    plt.figure()
     # Loop over the epochs
     for epoch in range(epochs):
 
-        print("Epoch: ",epoch, " time: ", time.time() - start)
+        #print("Epoch: ",epoch, " time: ", time.time() - start)
 
         with tf.GradientTape(persistent=False) as tape:
 
@@ -370,11 +344,11 @@ def main():
                     total_sum -= tf.math.log(proba)
 
                     # when layer is for a convCell choice
-                    if ( k < num_block_conv*4 ):
+                    if ( k < num_block_conv*1 ):
                         cell1.append(classe)                    
                         
                         #print("k: "+str(k)+ " "+str(cell1))
-                        if(k==(num_block_conv*4-1)):
+                        if(k==(num_block_conv*1-1)):
                             cells_array.append(cell1)
                             cell1=[]
                         k+=1
@@ -396,72 +370,114 @@ def main():
                             k=0
                             u=0
                     count+=1
+                    
+                
 
-                X_train, X_val, y_train, y_val = train_test_split(X, y, train_size=0.03, test_size=0.003, shuffle= True)
+                #cells_array = [[0], [0]]
+                print("cells_array")
+                print(cells_array)           
+
+                X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=0.1, shuffle=True)
 
                 train_data = tf.data.Dataset.from_tensor_slices((X_train, y_train))
-                
+                                                
                 val_data = tf.data.Dataset.from_tensor_slices((X_val, y_val))
-
-                batch_size = 30
+                
+                
+                batch_size = 32
 
                 train_data = train_data.batch(batch_size)
                 val_data = val_data.batch(batch_size)
 
                 train_data = train_data.with_options(options)
                 val_data = val_data.with_options(options)
-
-                #########
-
+                
                 with strategy.scope():
 
-                    model = get_compiled_cnn_model(cells_array, block_names)
+                    model = get_compiled_cnn_model(cells_array)
 
                 callback = tf.keras.callbacks.EarlyStopping(monitor='loss')
-             
-                model.load_weights("total_weights.h5", by_name=True)
+
+                classes_y = np.argmax(y_train, axis=1)
+                
+                #weight_for_0 = 1.0 / len(classes_y[classes_y==0])
+                #weight_for_1 = 1.0 / len(classes_y[classes_y==1])
+                    
+                #classes_y = np.argmax(y_train, axis=1)
+                #print("nbre 1 / nbre de 0 = "+str(len(classes_y[classes_y==1])/len(classes_y[classes_y==0])))
+
+                    
+                #class_weight = {0: weight_for_0, 1: weight_for_1}
                     
                 history = model.fit(
                     train_data,
                     validation_data=val_data,
                     epochs=10,
-                    batch_size=30,
-                    callbacks=[callback],
+                    batch_size=32,
+                    #callbacks=[callback],
+                    verbose=1,
+                    #class_weight=class_weight,
                     #validation_split=0.1
                 )
 
-                model.save_weights("tmp_weights.h5")
-
-                tmp_weights =  h5py.File('tmp_weights.h5', 'r')
-                keys_tmp_weights = list(tmp_weights.keys())
-                keys_total_weights = list(total_weights.keys())
-
-                for key in keys_tmp_weights:
-                    if key not in keys_total_weights:
-                        tmp_weights.copy(tmp_weights[key], total_weights)
-                    else:
-                        del total_weights[key]
-                        tmp_weights.copy(tmp_weights[key], total_weights)
-                              
-                tmp_weights.close()
                 
-                val_acc = history.history['val_accuracy'][-1]                
+                val_loss = history.history['val_loss']
+                epochs = range(len(val_loss))
+                
+                plt.plot(epochs, val_loss, 'b')
+                #plt.title("Training and Validation Loss")
+                #plt.legend()
+                #plt.show()
+                
+                
+
+                
+                predictions = model(X_val)
+                predictions = np.argmax(predictions, axis=1)
+                real_pred = np.argmax(y_val, axis=1)
+                
+                
+                """
+                metric = tfa.metrics.CohenKappa(num_classes=2, sparse_labels=False)
+                metric.update_state(real_pred , predictions)
+                result = metric.result()
+                print("kappa_tfa : "+str(result.numpy()))
+                """
+               
+                                                
+                
+                val_acc = history.history['val_accuracy'][-1]
+            
+                
+                
+                #val_acc = history.history['val_accuracy'][-1]
+                #print(val_acc)
+                
+                """
+                exit()
+                
+                # cells_array
+                
+                #print(cells_array)
+                if(cells_array[0][0] == 1):
+                    val_acc = 0.80
+                else:
+                    val_acc = 0.2
+                
+                
                 accuracies.append(val_acc)
-                
-                ema = 0
+                b=0
                 if (len(accuracies) > 10):
-                    mean_acc.append(mean(accuracies[-10:]))
-                    ema = moving_average(accuracies, 10, type='exponential')
-                    f = open("log_Controller_ENAS5.txt", "a")
-                    f.write("ema: "+str(ema)+" mean_acc = "+str(mean_acc[-1])+" Epoch: "+str(epoch)+ " time: "+ str(time.time() - start)+"\n")
+                    mean_acc = mean(accuracies[-10:])
+                    b = moving_average(accuracies, 10, type='exponential')
+                    print("mean = "+str(mean_acc))
+                    f = open("log_Controller_ENAS2.txt", "a")
+                    f.write(str(mean_acc)+" Epoch: "+str(epoch)+ " time: "+ str(time.time() - start)+"\n")
                     f.close()
-                    
-                    
-                    
+                  
                 
-                total_sum *= ( val_acc - ema )
-                model.save('ENAS5_last_child')
-                del model
+                total_sum *= ( val_acc - b )
+                """
 
                 
             total_sum/=sampling_number
@@ -470,10 +486,8 @@ def main():
         grads = tape.gradient(total_sum, controller.trainable_weights)
         optimizer.apply_gradients(zip(grads, controller.trainable_weights))
 
-        if(len(mean_acc)>0):
-            controller.save_weights("ENAS5_weights_.h5")
-            
-    total_weights.close()
+    plt.savefig('all_losses.png')
+        
     print("total allocated memory")
     print(tracemalloc.get_traced_memory())
     tracemalloc.stop()
