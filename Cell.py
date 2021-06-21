@@ -18,7 +18,6 @@ class Cell():
         self.type_cell = type_cell
         self.cell_inputs = cell_inputs
         self.cell_output = cell_output
-        
 
 
 
