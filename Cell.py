@@ -23,7 +23,6 @@ class Cell():
 
     def generateCell(self, blocks_array, type_cell, num_cell):
 
-
         #x = self.cell_input
 
         outputs = self.cell_inputs
