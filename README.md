@@ -13,3 +13,6 @@ generates the RNN controller for ENAS
 
 ## test.py
 what I am currently testing/implementing
+
+## main.py
+To be executed

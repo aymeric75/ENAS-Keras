@@ -13,12 +13,12 @@ import numpy as np
 class Cell():
 
 
-
     def __init__(self, type_cell = 'conv', cell_inputs = [], cell_output=''):
 
         self.type_cell = type_cell
         self.cell_inputs = cell_inputs
         self.cell_output = cell_output
+        
 
 
 
