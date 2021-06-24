@@ -98,7 +98,9 @@ class Block():
         #elif(self.input1 == self.input2 and self.op1 == self.op2): # if inputs and ops same, as if block with one input and one op
         elif( tf.math.equal(self.input1,self.input2) and tf.math.equal(self.op1, self.op2) ):
                 self.output = (the_layers[self.op2])(self.inputs[self.input2])
+                
         else: # 
+
                 self.output = (self.comb)([(the_layers[self.op1])(self.inputs[self.input1]), (the_layers[self.op2])(self.inputs[self.input2])])
 
         #print(self.output)

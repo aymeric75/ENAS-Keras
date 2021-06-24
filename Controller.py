@@ -135,7 +135,6 @@ class Controller():
 
 
                     count+=1
-                    print("here 3")
                     xx = self.LSTM_softmax(inputs=_x, num_classes=_num_classes, initial=_initial, count=count, type_cell="conv")
                     #x, rx, emb = self.LSTM_softmax(inputs=_x, num_classes=_num_classes, reshaped_inputs=_rx, initial=_initial)
 
@@ -145,13 +144,11 @@ class Controller():
                 elif ( self.scheme == 2 ):
 
 
-                    for o in ["inputL", "inputR", "operL"]:
+                    for o in ["inputL", "operL"]:
                         
                         if i == 0 and j == 0 and o == "inputL":
-                            print("here 1")
                             _x, _initial = input_cell, True
                         else:
-                            print("here 2")
                             #_x, _rx, _initial = emb, rx, False # output of previous LSTM_softmax
                             _x, _initial = xx, False # output of previous LSTM_softmax
 
@@ -164,7 +161,6 @@ class Controller():
 
 
                         count+=1
-                        print("here 3")
                         xx = self.LSTM_softmax(inputs=_x, num_classes=_num_classes, initial=_initial, count=count, type_cell="conv")
                         #x, rx, emb = self.LSTM_softmax(inputs=_x, num_classes=_num_classes, reshaped_inputs=_rx, initial=_initial)
 
@@ -185,7 +181,6 @@ class Controller():
                  
 
                         count+=1
-                        print("here 3")
                         xx = self.LSTM_softmax(inputs=_x, num_classes=_num_classes, initial=_initial, count=count, type_cell="conv")
                         #x, rx, emb = self.LSTM_softmax(inputs=_x, num_classes=_num_classes, reshaped_inputs=_rx, initial=_initial)
 
@@ -212,7 +207,6 @@ class Controller():
 
 
                         count+=1
-                        print("here 3")
                         xx = self.LSTM_softmax(inputs=_x, num_classes=_num_classes, initial=_initial, count=count, type_cell="conv")
                         #x, rx, emb = self.LSTM_softmax(inputs=_x, num_classes=_num_classes, reshaped_inputs=_rx, initial=_initial)
 
@@ -254,11 +248,12 @@ class Controller():
         #outputs.append(x)
         x = layers.BatchNormalization(name="outside_batchnorm")(x)
         #outputs.append(x)
-        #x = layers.Conv2D(10, (2, 10), padding="same", activation='relu', name="outside_conv2")(x)
+        x = layers.Conv2D(10, (2, 10), padding="same", activation='relu', name="outside_conv2")(x)
         outputs.append(x)
 
         # loop over the cells and construct the model
         for i, arr in enumerate(cells_array):
+
 
             if(i>0):
                 outputs = [x]
@@ -266,7 +261,7 @@ class Controller():
             if( i%2==0 ):
 
                 # Conv Cell, cell_inputs must ALWAYS be an array with the possible DIRECT inputs for the cell
-                cell = Cell('conv', cell_inputs=outputs)
+                cell = Cell('conv', cell_inputs=outputs, scheme=self.scheme)
                 blocks_array = np.array( arr )
                 cell.generateCell( blocks_array, 'conv', num_cell=i )
                 x = cell.cell_output
@@ -289,7 +284,7 @@ class Controller():
         outputss = layers.Dense(2, activation='softmax', name="outside_dense2")(x)
         
         model = keras.Model(inputs=inputs, outputs=outputss, name="ansari_model")
-        utils.plot_model(model, to_file="child_ENAS2.png")
+        utils.plot_model(model, to_file="child.png")
 
         # metrics=['acc',f1_m,precision_m, recall_m]
         # Compute the accuracy
@@ -305,7 +300,7 @@ class Controller():
 
 
 
-    def train(self):
+    def train(self, best_epoch=0, epochs_child=2):
 
         tracemalloc.start()
         
@@ -363,7 +358,7 @@ class Controller():
         
         start = time.time()
 
-        plt.figure()
+        
         # Loop over the epochs
         for epoch in range(epochs):
 
@@ -406,7 +401,7 @@ class Controller():
                     if(self.scheme==1):
                         v = 1
                     elif(self.scheme==2):
-                        v = 3
+                        v = 2
                     elif(self.scheme==3):
                         v = 2
                     else:
@@ -449,9 +444,6 @@ class Controller():
                         
                     
 
-
-                    exit()
-
                     X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=0.1, shuffle=True)
 
                     train_data = tf.data.Dataset.from_tensor_slices((X_train, y_train))
@@ -467,9 +459,11 @@ class Controller():
                     train_data = train_data.with_options(options)
                     val_data = val_data.with_options(options)
                     
+
                     with strategy.scope():
 
                         model = self.get_compiled_cnn_model(cells_array)
+
 
                     callback = tf.keras.callbacks.EarlyStopping(monitor='loss')
 
@@ -484,10 +478,13 @@ class Controller():
                         
                     #class_weight = {0: weight_for_0, 1: weight_for_1}
                         
+                    if(best_epoch==1):
+                        epochs_child=10
+
                     history = model.fit(
                         train_data,
                         validation_data=val_data,
-                        epochs=10,
+                        epochs=epochs_child,
                         batch_size=32,
                         #callbacks=[callback],
                         verbose=1,
@@ -499,11 +496,8 @@ class Controller():
                     val_loss = history.history['val_loss']
                     epochs = range(len(val_loss))
                     
-                    plt.plot(epochs, val_loss, 'b')
-                    #plt.title("Training and Validation Loss")
-                    #plt.legend()
-                    #plt.show()
-                    
+                    if (best_epoch==1):
+                        plt.plot(epochs, val_loss, 'b')
                     
 
                     
@@ -561,7 +555,7 @@ class Controller():
             grads = tape.gradient(total_sum, controller.trainable_weights)
             optimizer.apply_gradients(zip(grads, controller.trainable_weights))
 
-        plt.savefig('all_losses.png')
+        
             
         print("total allocated memory")
         print(tracemalloc.get_traced_memory())
@@ -571,7 +565,12 @@ class Controller():
 
 
 
+    def best_epoch(self):
 
+        plt.figure()
 
+        self.train(best_epoch=1)
+
+        plt.savefig('all_losses.png')
 
 

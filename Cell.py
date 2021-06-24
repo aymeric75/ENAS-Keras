@@ -14,11 +14,12 @@ class Cell():
 
 
 
-    def __init__(self, type_cell = 'conv', cell_inputs = [], cell_output=''):
+    def __init__(self, type_cell = 'conv', cell_inputs = [], cell_output='', scheme=1):
 
         self.type_cell = type_cell
         self.cell_inputs = cell_inputs
         self.cell_output = cell_output
+        self.scheme = scheme
 
 
 
@@ -34,20 +35,36 @@ class Cell():
 
         if(self.type_cell=='conv'):
 
-            for i in range(0, len(blocks_array)):
+            if(self.scheme==1):
+                step=1
+            elif(self.scheme==2):
+                step=2
+            elif(self.scheme==3):
+                step=2
+            else:
+                step=4
+
+            for i in range(0, len(blocks_array), step):
+
 
 
                 chosen_outputs.append(blocks_array[i])
-                #chosen_outputs.append(blocks_array[i+1])
                 
-                block_name = 'cell-'+str(num_cell)+'-block-'+str(int(i))+"-"+str(i)+"-"+str(i)+"-"+str(blocks_array[i])+"-"+str(blocks_array[i])
+                block_name = 'C'+str(num_cell)+'-B'+str(int(i/step))
                 
 
-                new_block = Block(block_name, input1=i, input2=i, op1=blocks_array[i], op2=blocks_array[i], inputs=outputs, cell_type=self.type_cell, num_cell=num_cell)
+                if(self.scheme==1):
+                    new_block = Block(block_name, input1=i, input2=i, op1=blocks_array[i], op2=blocks_array[i], inputs=outputs, cell_type=self.type_cell, num_cell=num_cell)
+                elif(self.scheme==2):
+                    new_block = Block(block_name, input1=int(i/2), input2=blocks_array[i], op1=blocks_array[i+1], op2=blocks_array[i+1], inputs=outputs, cell_type=self.type_cell, num_cell=num_cell)
+                elif(self.scheme==3):
+                    new_block = Block(block_name, input1=int(i/2), input2=int(i/2), op1=blocks_array[i], op2=blocks_array[i+1], inputs=outputs, cell_type=self.type_cell, num_cell=num_cell)
+                else:
+                    new_block = Block(block_name, input1=blocks_array[i], input2=blocks_array[i+1], op1=blocks_array[i+2], op2=blocks_array[i+3], inputs=outputs, cell_type=self.type_cell, num_cell=num_cell)
+                
+
 
                 new_block.construct()
-
-
                 outputs.append(new_block.output)
 
         else:
@@ -55,7 +72,9 @@ class Cell():
             for i in range(0, len(blocks_array)):
 
 
-                new_block = Block('cell-'+str(num_cell)+'-block-'+str(i), input1=i, input2=i, op1=blocks_array[i], 
+                block_name = 'C'+str(num_cell)+'-B'+str(i)
+
+                new_block = Block(block_name, input1=i, input2=i, op1=blocks_array[i], 
                     op2=blocks_array[i], inputs=outputs, cell_type=self.type_cell, num_cell=num_cell)
 
                 new_block.construct()
@@ -66,9 +85,21 @@ class Cell():
 
 
 
-        if(self.type_cell=='conv'):
-        
-            self.cell_output = outputs[-1]
+
+        if(self.type_cell=='conv' and (self.scheme==4) ):
+
+            # retrieve all unchosen outputs and add them 
+            unchosen_outputs = []
+            for i, out in enumerate(outputs):
+                if (i not in chosen_outputs):
+                    unchosen_outputs.append(out)
+
+            # merge all unplugged outputs
+            if ( len(unchosen_outputs) > 1 ):
+                self.cell_output = layers.Add( name=str(num_cell)+"-all_and_one" )( unchosen_outputs )
+
+            else:
+                self.cell_output = outputs[-1]
 
         else:
             # add the add to outputs[-1]
