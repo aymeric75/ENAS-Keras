@@ -300,20 +300,20 @@ class Controller():
 
 
 
-    def train(self, best_epoch=0, epochs_child=2):
+    def train(self, best_epoch=0, epochs=5, epochs_child=2):
 
         tracemalloc.start()
         
-        #loaded = load_data("../../../../data_conv_training.mat", "../../../../data_conv_testing.mat",clip_value=300)
-        #X = loaded[0].transpose((0,2,1)) # eeg training
-        #y = loaded[1] 
-        #y = keras.utils.to_categorical(y, num_classes=2)
+        loaded = load_data("../../../../data_conv_training.mat", "../../../../data_conv_testing.mat",clip_value=300)
+        X = loaded[0].transpose((0,2,1)) # eeg training
+        y = loaded[1] 
+        y = keras.utils.to_categorical(y, num_classes=2)
 
         
 
-        X = np.random.rand(10000,8,900)
-        y = np.random.choice(2, 10000)
-        y = keras.utils.to_categorical(y, num_classes=2)
+        #X = np.random.rand(10000,8,900)
+        #y = np.random.choice(2, 10000)
+        #y = keras.utils.to_categorical(y, num_classes=2)
         
         
         
@@ -336,7 +336,7 @@ class Controller():
         ###############
 
 
-        epochs = 5
+        epochs = epochs
         
         
         sampling_number = 1 # number of arch child to sample at each epoch
@@ -569,7 +569,7 @@ class Controller():
 
         plt.figure()
 
-        self.train(best_epoch=1)
+        self.train(best_epoch=1, epochs=10)
 
         plt.savefig('all_losses.png')
 
