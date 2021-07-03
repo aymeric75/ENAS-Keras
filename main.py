@@ -13,8 +13,7 @@ def main():
 
 	controller = Controller(num_block_conv=num_block_conv, num_block_reduc=num_block_reduc, num_op_conv=8, num_op_reduc=2, num_alt=num_alt, scheme=2)
 
-
-	controller.best_epoch()
+	controller.best_epoch(show_time=1)
 
 	#controller.train()
 

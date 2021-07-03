@@ -300,7 +300,7 @@ class Controller():
 
 
 
-    def train(self, best_epoch=0, epochs=5, epochs_child=2):
+    def train(self, best_epoch=0, epochs=5, epochs_child=2, show_time=0):
 
         tracemalloc.start()
         
@@ -355,10 +355,7 @@ class Controller():
         
         #total_weights = h5py.File("total_weights.h5", "w")
         
-        
-        start = time.time()
 
-        
         # Loop over the epochs
         for epoch in range(epochs):
 
@@ -478,9 +475,8 @@ class Controller():
                         
                     #class_weight = {0: weight_for_0, 1: weight_for_1}
                         
-                    if(best_epoch==1):
-                        epochs_child=10
-
+                    start = time.time()
+                        
                     history = model.fit(
                         train_data,
                         validation_data=val_data,
@@ -491,13 +487,29 @@ class Controller():
                         #class_weight=class_weight,
                         #validation_split=0.1
                     )
+                    
+                    
+                    if (show_time==1):
+                        
+                        time_train = time.time() - start
+                        
+                        time_epoch = time_train
 
+                        time_total = time_train*epochs
+                        
+                        
+                        print("time one train: "+str(time_epoch)+"s or "+str(int(time_epoch/60))+" min")
+                        print("time for all epochs: "+str(time_total)+"s or "+str(int(time_total/60))+" min")
+             
+                        exit()
+                        
+                        
                     
                     val_loss = history.history['val_loss']
-                    epochs = range(len(val_loss))
+                    epochs_tmp = range(len(val_loss))
                     
-                    if (best_epoch==1):
-                        plt.plot(epochs, val_loss, 'b')
+                    if (best_epoch==1 and show_time==0):
+                        plt.plot(epochs_tmp, val_loss, 'b')
                     
 
                     
@@ -565,12 +577,15 @@ class Controller():
 
 
 
-    def best_epoch(self):
+    def best_epoch(self, show_time=0):
 
-        plt.figure()
+        
+        if(show_time==0):
+            plt.figure()
 
-        self.train(best_epoch=1, epochs=10)
+        self.train(best_epoch=1, epochs=10, epochs_child=10, show_time=show_time)
 
-        plt.savefig('all_losses.png')
+        if(show_time==0):
+            plt.savefig('all_losses.png')
 
 
