@@ -411,7 +411,6 @@ class Controller():
 
         callback = tf.keras.callbacks.EarlyStopping(monitor='loss')
 
-
         history = model.fit(
                 train_data,
                 validation_data=val_data,
@@ -499,12 +498,8 @@ class Controller():
                     total_sum *= ( val_acc )
                     del model
 
-
-
                 total_sum/=sampling_number
                 
-                
-
             grads = tape.gradient(total_sum, controller.trainable_weights)
             optimizer.apply_gradients(zip(grads, controller.trainable_weights))
 
@@ -514,29 +509,35 @@ class Controller():
         total_weights.close()
 
 
-    def best_epoch(self, show_time=0):
+
+
+
+    def best_epoch(self):
+        
+        # sample and train 10 child archs  on  20 epochs each
+
+        # PLOT all eval_loss
+
+        X, y = self.load_shaped_data(random=1)
+
+        controller = self.generateController()
+
+        plt.figure()
+
+        for i in range(10):
+
+            cells_array, __ = self.sample_arch(controller)
+
+            strategy = tf.distribute.MirroredStrategy()
+            with strategy.scope():
+                model = self.get_compiled_cnn_model(cells_array)
+
+            history = self.train_child(X, y, model, 32, 20)
+            val_loss = history.history['val_loss'][-1]
+            nbre_epochs = range(len(val_loss))
+            plt.plot(nbre_epochs, val_loss, 'b')
 
         
-        if(show_time==0):
-            plt.figure()
-
-        self.train(best_epoch=1, epochs=10, epochs_child=10, show_time=show_time)
-
-        if(show_time==0):
-            plt.savefig('all_losses.png')
+        plt.savefig('all_losses.png')
 
 
-
-
-                    # if (show_time==1):
-                        
-                    #     time_train = time.time() - start
-                    #     time_epoch = time_train
-                    #     time_total = time_train*epochs           
-                        
-                    # epochs_tmp = range(len(val_loss))
-                    #     print("time one train: "+str(time_epoch)+"s or "+str(int(time_epoch/60))+" min")
-                    #     print("time for all epochs: "+str(time_total)+"s or "+str(int(time_total/60))+" min")
-                    #if (best_epoch==1 and show_time==0):
-                    #        plt.plot(epochs_tmp, val_loss, 'b')
-                    

@@ -2,3 +2,4 @@
 *.png
 *.pbs
 *.pbs.*
+total_weights.h5
