@@ -12,7 +12,9 @@ def main():
 
 	#controller.train(epochs=5, epochs_child=2)
 
-	controller.best_epoch()
+	#controller.best_epoch()
+
+	controller.match_train_test_metrics("val_accuracy", "kappa_score", 5)
 
 	#controller.train()
 

@@ -297,7 +297,7 @@ class Controller():
 
 
 
-    def load_shaped_data(self, random=0):
+    def load_shaped_data_train(self, random=0):
 
 
         if(random==1):
@@ -314,6 +314,22 @@ class Controller():
             y = keras.utils.to_categorical(y, num_classes=2)
             
         return X, y        
+
+
+
+
+
+    def load_shaped_data_test(self):
+
+        loaded = load_data("./data_conv_training.mat", "./data_conv_testing.mat",clip_value=300)
+
+        X_test = loaded[2].transpose((0,2,1))
+        y_test = loaded[3]
+            
+        return X_test, y_test        
+
+
+
 
 
 
@@ -429,7 +445,7 @@ class Controller():
     def train(self, epochs=5, epochs_child=2):
 
         
-        X, y = self.load_shaped_data(random=1)
+        X, y = self.load_shaped_data_train(random=1)
 
         controller = self.generateController()
 
@@ -518,7 +534,7 @@ class Controller():
 
         # PLOT all eval_loss
 
-        X, y = self.load_shaped_data(random=1)
+        X, y = self.load_shaped_data_train(random=1)
 
         controller = self.generateController()
 
@@ -539,5 +555,62 @@ class Controller():
 
         
         plt.savefig('all_losses.png')
+
+
+
+    # check if the train_metric (used during training of each child)
+    # "follows" the "final" metrics (kappa score), ie, on the test set
+
+    def match_train_test_metrics(self, train_metric, test_metric, nb_child_epochs):
+
+
+
+        X, y = self.load_shaped_data_train(random=1)
+
+        X_test, y_test = self.load_shaped_data_test()
+
+        controller = self.generateController()
+
+        train_metrics = []
+
+        for i in range(10):
+
+            cells_array, __ = self.sample_arch(controller)
+
+            strategy = tf.distribute.MirroredStrategy()
+            with strategy.scope():
+                model = self.get_compiled_cnn_model(cells_array)
+
+            history = self.train_child(X, y, model, 32, nb_child_epochs)
+            val_acc = history.history[train_metric][-1]
+
+            train_metrics.append(val_acc)
+
+            # then test network on test set
+
+            predictions = model.predict(X_test)
+            predictions = np.argmax(predictions, axis=1)
+            real_values = y_test
+
+
+            test_metric_value = 0
+            if(test_metric == 'kappa_score'):
+                test_metric_value = metrics.cohen_kappa_score(predictions, real_values)
+
+            test_metrics.append(test_metric_value)
+
+
+        plt.figure()
+
+        plt.plot(len(train_metrics), train_metrics, 'b')
+
+        plt.plot(len(test_metrics), test_metrics, 'r')
+
+        plt.savefig('match_test_train_metrics.png')                        
+
+
+
+
+        
 
 
