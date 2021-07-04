@@ -297,52 +297,144 @@ class Controller():
 
 
 
+    def load_shaped_data(self, random=0):
+
+
+        if(random==1):
+
+            X = np.random.rand(10000,8,900)
+            y = np.random.choice(2, 10000)
+            y = keras.utils.to_categorical(y, num_classes=2)
+            
+        else:
+
+            loaded = load_data("../../../../data_conv_training.mat", "../../../../data_conv_testing.mat",clip_value=300)
+            X = loaded[0].transpose((0,2,1)) # eeg training
+            y = loaded[1] 
+            y = keras.utils.to_categorical(y, num_classes=2)
+            
+        return X, y        
 
 
 
-    def train(self, best_epoch=0, epochs=5, epochs_child=2, show_time=0):
+    def sample_arch(self, controller):
 
-        tracemalloc.start()
-        
-        loaded = load_data("../../../../data_conv_training.mat", "../../../../data_conv_testing.mat",clip_value=300)
-        X = loaded[0].transpose((0,2,1)) # eeg training
-        y = loaded[1] 
-        y = keras.utils.to_categorical(y, num_classes=2)
+        # FEEDFORWARD
+        inp = controller.input  # input placeholder
+        outputs = [layer.output for layer in controller.layers if ( layer.__class__.__name__ == "Dense" or layer.__class__.__name__ == "Lambda" )]  # all layer outputs
+        functor = K.function([inp], outputs )   # evaluation function
+        test = np.random.random((1,1))[np.newaxis,...]
+        layer_outs = functor([test]) # Here are all the outputs of all the layers
 
-        
+        # sum over the hyperparameters (i.e, over the choices made my the RNN)
 
-        #X = np.random.rand(10000,8,900)
-        #y = np.random.choice(2, 10000)
-        #y = keras.utils.to_categorical(y, num_classes=2)
-        
-        
-        
-        # Init data option & disable AutoShard.
+        # final array of all blocks/cells
+        cells_array = []
+
+        cell1 = [] # tmp array for conv cells
+        cell2 = [] # tmp array for reduc cells
+
+        k=0
+        u=0
+        count=0
+        sum_proba = 0
+
+
+        ###################
+        # MAKING CHILD ARCH
+        ###################
+
+
+        if(self.scheme==1):
+            v = 1
+        elif(self.scheme==2):
+            v = 2
+        elif(self.scheme==3):
+            v = 2
+        else:
+            v=4
+
+        # loop over each layer (choice)
+        for i in range(0, len(layer_outs), 2):
+
+            classe = layer_outs[i+1][0][0]
+            proba = controller.losses[int(i/2)][0][0][classe]
+            sum_proba -= tf.math.log(proba)
+
+            # when layer is for a convCell choice
+            if ( k < self.num_block_conv*v ):
+                cell1.append(classe)                    
+                
+                #print("k: "+str(k)+ " "+str(cell1))
+                if(k==(self.num_block_conv*v-1)):
+                    cells_array.append(cell1)
+                    cell1=[]
+                k+=1
+
+            # when layer is for a reducCell choice
+            else:
+                cell1=[]
+                if(u<self.num_block_reduc):
+                    #print("u: "+str(u))
+                    cell2.append(classe)
+                    if(u==(self.num_block_reduc-1)):
+                        cells_array.append(cell2)
+                        cell2=[]
+                    u+=1
+                else:
+                    k=0
+                    u=0
+                if(u==self.num_block_reduc):
+                    k=0
+                    u=0
+            count+=1
+            
+
+        return cells_array, sum_proba
+
+
+
+    def train_child(self, X, y, model, batch_size, epochs_child):
+                    
         options = tf.data.Options()
         options.experimental_distribute.auto_shard_policy = tf.data.experimental.AutoShardPolicy.OFF
+
+        X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=0.1, shuffle=True)
+        train_data = tf.data.Dataset.from_tensor_slices((X_train, y_train))
+        val_data = tf.data.Dataset.from_tensor_slices((X_val, y_val))
+    
+        train_data = train_data.batch(batch_size)
+        val_data = val_data.batch(batch_size)
+        train_data = train_data.with_options(options)
+        val_data = val_data.with_options(options)
         
-        ##########################
-        # Controller Instanciation
-        ##########################
+
+        callback = tf.keras.callbacks.EarlyStopping(monitor='loss')
 
 
+        history = model.fit(
+                train_data,
+                validation_data=val_data,
+                epochs=epochs_child,
+                batch_size=batch_size,
+                #callbacks=[callback],
+                verbose=1,
+                #class_weight=class_weight,
+                #validation_split=0.1
+            )
+       
+
+        return history     
+
+
+    def train(self, epochs=5, epochs_child=2):
+
+        
+        X, y = self.load_shaped_data(random=1)
 
         controller = self.generateController()
-        #utils.plot_model(controller, to_file="controller_example2.png")
 
-        
-        ###############
-        # TRAINING LOOP
-        ###############
-
-
-        epochs = epochs
-        
-        
         sampling_number = 1 # number of arch child to sample at each epoch
-
-        sum_over_choices = 0 # outer sum of the policy gradient
-
 
         optimizer = keras.optimizers.SGD(learning_rate=1e-3)
 
@@ -350,11 +442,9 @@ class Controller():
         mean_acc = []
         
         strategy = tf.distribute.MirroredStrategy()
-        print('Number of devices: {}'.format(strategy.num_replicas_in_sync))
+        #print('Number of devices: {}'.format(strategy.num_replicas_in_sync))
 
-        
-        #total_weights = h5py.File("total_weights.h5", "w")
-        
+        total_weights = h5py.File("total_weights.h5", "w")
 
         # Loop over the epochs
         for epoch in range(epochs):
@@ -369,212 +459,59 @@ class Controller():
                 for s in range(sampling_number):
 
                     val_acc = tf.Variable(0)
-
-                    # FEEDFORWARD
-                    inp = controller.input  # input placeholder
-                    outputs = [layer.output for layer in controller.layers if ( layer.__class__.__name__ == "Dense" or layer.__class__.__name__ == "Lambda" )]  # all layer outputs
-                    functor = K.function([inp], outputs )   # evaluation function
-                    test = np.random.random((1,1))[np.newaxis,...]
-                    layer_outs = functor([test]) # Here are all the outputs of all the layers
-
-                    # sum over the hyperparameters (i.e, over the choices made my the RNN)
-
-                    # final array of all blocks/cells
-                    cells_array = []
-
-                    cell1 = [] # tmp array for conv cells
-                    cell2 = [] # tmp array for reduc cells
-
-                    k=0
-                    u=0
-                    count=0
-
-
-                    ###################
-                    # MAKING CHILD ARCH
-                    ###################
-
-
-                    if(self.scheme==1):
-                        v = 1
-                    elif(self.scheme==2):
-                        v = 2
-                    elif(self.scheme==3):
-                        v = 2
-                    else:
-                        v=4
-
-                    # loop over each layer (choice)
-                    for i in range(0, len(layer_outs), 2):
-
-                        classe = layer_outs[i+1][0][0]
-                        proba = controller.losses[int(i/2)][0][0][classe]
-                        total_sum -= tf.math.log(proba)
-
-                        # when layer is for a convCell choice
-                        if ( k < self.num_block_conv*v ):
-                            cell1.append(classe)                    
-                            
-                            #print("k: "+str(k)+ " "+str(cell1))
-                            if(k==(self.num_block_conv*v-1)):
-                                cells_array.append(cell1)
-                                cell1=[]
-                            k+=1
-
-                        # when layer is for a reducCell choice
-                        else:
-                            cell1=[]
-                            if(u<self.num_block_reduc):
-                                #print("u: "+str(u))
-                                cell2.append(classe)
-                                if(u==(self.num_block_reduc-1)):
-                                    cells_array.append(cell2)
-                                    cell2=[]
-                                u+=1
-                            else:
-                                k=0
-                                u=0
-                            if(u==self.num_block_reduc):
-                                k=0
-                                u=0
-                        count+=1
-                        
-                    
-
-                    X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=0.1, shuffle=True)
-
-                    train_data = tf.data.Dataset.from_tensor_slices((X_train, y_train))
-                                                    
-                    val_data = tf.data.Dataset.from_tensor_slices((X_val, y_val))
-                    
-                    
-                    batch_size = 32
-
-                    train_data = train_data.batch(batch_size)
-                    val_data = val_data.batch(batch_size)
-
-                    train_data = train_data.with_options(options)
-                    val_data = val_data.with_options(options)
-                    
+                    cells_array, sum_proba = self.sample_arch(controller)
+                    total_sum += sum_proba
 
                     with strategy.scope():
-
                         model = self.get_compiled_cnn_model(cells_array)
 
+                    model.load_weights("total_weights.h5", by_name=True)
 
-                    callback = tf.keras.callbacks.EarlyStopping(monitor='loss')
+                    history = self.train_child(X, y, model, 32, 10)
+                    
+                    model.save_weights("tmp_weights.h5")
 
-                    classes_y = np.argmax(y_train, axis=1)
-                    
-                    #weight_for_0 = 1.0 / len(classes_y[classes_y==0])
-                    #weight_for_1 = 1.0 / len(classes_y[classes_y==1])
-                        
-                    #classes_y = np.argmax(y_train, axis=1)
-                    #print("nbre 1 / nbre de 0 = "+str(len(classes_y[classes_y==1])/len(classes_y[classes_y==0])))
+                    tmp_weights =  h5py.File('tmp_weights.h5', 'r')
+                    keys_tmp_weights = list(tmp_weights.keys())
+                    keys_total_weights = list(total_weights.keys())
 
-                        
-                    #class_weight = {0: weight_for_0, 1: weight_for_1}
-                        
-                    start = time.time()
-                        
-                    history = model.fit(
-                        train_data,
-                        validation_data=val_data,
-                        epochs=epochs_child,
-                        batch_size=32,
-                        #callbacks=[callback],
-                        verbose=1,
-                        #class_weight=class_weight,
-                        #validation_split=0.1
-                    )
-                    
-                    
-                    if (show_time==1):
-                        
-                        time_train = time.time() - start
-                        
-                        time_epoch = time_train
+                    for key in keys_tmp_weights:
+                        if key not in keys_total_weights:
+                            tmp_weights.copy(tmp_weights[key], total_weights)
+                        else:
+                            del total_weights[key]
+                            tmp_weights.copy(tmp_weights[key], total_weights)
+                    tmp_weights.close()
 
-                        time_total = time_train*epochs
-                        
-                        
-                        print("time one train: "+str(time_epoch)+"s or "+str(int(time_epoch/60))+" min")
-                        print("time for all epochs: "+str(time_total)+"s or "+str(int(time_total/60))+" min")
-             
-                        exit()
-                        
-                        
-                    
-                    val_loss = history.history['val_loss']
-                    epochs_tmp = range(len(val_loss))
-                    
-                    if (best_epoch==1 and show_time==0):
-                        plt.plot(epochs_tmp, val_loss, 'b')
-                    
-
-                    
-                    predictions = model(X_val)
-                    predictions = np.argmax(predictions, axis=1)
-                    real_pred = np.argmax(y_val, axis=1)
-                    
-                    
-                    """
-                    metric = tfa.metrics.CohenKappa(num_classes=2, sparse_labels=False)
-                    metric.update_state(real_pred , predictions)
-                    result = metric.result()
-                    print("kappa_tfa : "+str(result.numpy()))
-                    """
-                   
-                                                    
-                    
                     val_acc = history.history['val_accuracy'][-1]
-                
-                    
-                    
-                    #val_acc = history.history['val_accuracy'][-1]
-                    #print(val_acc)
-                    
-                    """
-                    exit()
-                    
-                    # cells_array
-                    
-                    #print(cells_array)
-                    if(cells_array[0][0] == 1):
-                        val_acc = 0.80
-                    else:
-                        val_acc = 0.2
-                    
-                    
                     accuracies.append(val_acc)
-                    b=0
+
+                    ema = 0
                     if (len(accuracies) > 10):
-                        mean_acc = mean(accuracies[-10:])
-                        b = moving_average(accuracies, 10, type='exponential')
-                        print("mean = "+str(mean_acc))
+                        mean_acc.append(mean(accuracies[-10:]))
+                        ema = moving_average(accuracies, 10, type='exponential')
                         f = open("log_Controller_ENAS2.txt", "a")
-                        f.write(str(mean_acc)+" Epoch: "+str(epoch)+ " time: "+ str(time.time() - start)+"\n")
+                        f.write("ema: "+str(ema)+" mean_acc = "+str(mean_acc[-1])+" Epoch: "+str(epoch)+ " time: "+ str(time.time() - start)+"\n")
                         f.close()
-                      
-                    
-                    total_sum *= ( val_acc - b )
-                    """
+                        
 
                     
+                    total_sum *= ( val_acc )
+                    del model
+
+
+
                 total_sum/=sampling_number
                 
-            
+                
+
             grads = tape.gradient(total_sum, controller.trainable_weights)
             optimizer.apply_gradients(zip(grads, controller.trainable_weights))
 
-        
-            
-        print("total allocated memory")
-        print(tracemalloc.get_traced_memory())
-        tracemalloc.stop()
+        if(len(mean_acc)>0):
+            controller.save_weights("Controller_weights_.h5")
 
-
-
+        total_weights.close()
 
 
     def best_epoch(self, show_time=0):
@@ -589,3 +526,17 @@ class Controller():
             plt.savefig('all_losses.png')
 
 
+
+
+                    # if (show_time==1):
+                        
+                    #     time_train = time.time() - start
+                    #     time_epoch = time_train
+                    #     time_total = time_train*epochs           
+                        
+                    # epochs_tmp = range(len(val_loss))
+                    #     print("time one train: "+str(time_epoch)+"s or "+str(int(time_epoch/60))+" min")
+                    #     print("time for all epochs: "+str(time_total)+"s or "+str(int(time_total/60))+" min")
+                    #if (best_epoch==1 and show_time==0):
+                    #        plt.plot(epochs_tmp, val_loss, 'b')
+                    

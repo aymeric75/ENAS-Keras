@@ -93,10 +93,3 @@ def duplicate_in_array(array, decimals):
             if(truncate_float(array[i], decimals) == truncate_float(array[i+1], decimals)):
                 return True
     return False
-
-
-
-
-
-
-
