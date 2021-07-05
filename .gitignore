@@ -3,3 +3,4 @@
 *.pbs
 *.pbs.*
 total_weights.h5
+__pycache__/
