@@ -647,11 +647,9 @@ class Controller():
             raise Exception("Sorry, inc must be < 0.4 and > 0") 
             
             
-        
-        
         controller = self.generateController()
         
-        # 1) Compute and store accuracies over 100 sampled children
+        # 1) Compute and store accuracies over 100 sampled children !!!!!!!!!!!!!
         
         # 2) retrieve the freq of distri of accuracies in N quantiles
         N=4
@@ -680,26 +678,18 @@ class Controller():
                     dico_archs[hash_] = mean
                     count+=1
         
-        # 4) 
+        # 4) train RNN
         
+        #       during training sample a child        
+        #                       if hash of sampled child in dico_archs, then retrieve corresponding value
         
-        
-        
-        good_archs = []
-        while(len(good_archs) < nb_good_arch):
-            
-            cells_array, __ = self.sample_arch(controller)
-            
-            if cells_array not in good_archs:
-                
-                good_archs.append(cells_array)
-            
 
         # loop forever until mean of accuracies increased by inc
         optimizer = keras.optimizers.SGD(learning_rate=1e-3)
         all_accs = []
         means_accs = []
         count_iter = 0
+        
         while(1):
             
             total_sum=0
@@ -708,10 +698,12 @@ class Controller():
                 cells_array, sum_proba = self.sample_arch(controller)
                 total_sum += sum_proba
                 
-                if cells_array in good_archs:
-                    acc = 0.5 + var
+                hash_ = hash(str(cells_array))
+                
+                if hash_ in dico_archs:
+                    acc = dico_archs[hash_]
                 else:
-                    acc = 0.5
+                    acc = 0.
                 
                 all_accs.append(acc)
         
