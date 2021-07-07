@@ -24,7 +24,7 @@ import tensorflow_addons as tfa
 #from Utils import moving_average, mvaverage, recall_m, precision_m, f1_m, kappa, truncate_float, duplicate_in_array
 from Utils import *
 import matplotlib.pyplot as plt
-
+import random
 
 def load_data(trainingPath, validationPath, clip_value=300):
 
@@ -636,12 +636,11 @@ class Controller():
         plt.savefig('match_test_train_metrics.png')
         
         
-    # perc  percentage of good arch (in total search space)
-    # inc considered increase of the metrics value
-    # var : variability in accuracy between worst and best values
+    # inc: considered increase of the metrics value
+    # nb_child_epochs : nb of epochs of child training
     # return nber of necessary iterations meeting the input conditions
     
-    def test_nb_iterations(self, inc=0.1):
+    def test_nb_iterations(self, inc=0.1, nb_child_epochs=5):
                 
         if (inc > 0.4 or inc <= 0):
             raise Exception("Sorry, inc must be < 0.4 and > 0") 
@@ -650,13 +649,15 @@ class Controller():
         controller = self.generateController()
         strategy = tf.distribute.MirroredStrategy()
 
-        ##
+        ####################################################################
         ##  Draw distribution of accuracy values among archs in search space
+        ####################################################################
         
-        # 1) Compute and store accuracies over 100 sampled children !!!!!!!!!!!!!
+        # 1) Compute and store accuracies over 100 sampled children
+        """
         X, y = self.load_shaped_data_train(random=0)
         accuracies = []
-        for i in range(100):
+        for i in range(3):
 
             cells_array, __ = self.sample_arch(controller)
         
@@ -667,22 +668,23 @@ class Controller():
             val_acc = history.history['val_accuracy'][-1]
 
             accuracies.append(val_acc)
-
+        """
+        
+        accuracies = [ 0.7, 0.2, 0.5, 0.9, 0.8, 0.6 ]
 
 
         # 2) retrieve the freq of distri of accuracies in N quantiles
         N=4
-        dico = frequency_distr(N, accuracies)
+        dico = frequency_distr(N, accuracies) # { mean_acc : freq }
+        
         
         # 3) loop over dico and build dico_archs
         
-        
-        
         dico_archs = {}  # each key is a hash of the array representing the arch
                          # each value is the corresponding accuracy (mean acc)
-        for mean in dico:
+        for mean_ in dico:
         
-            nb_archs_tmp = int(dico[mean] * self.search_space_size())
+            nb_archs_tmp = int(dico[mean_] * self.search_space_size())
         
             # build
             count=0
@@ -692,12 +694,29 @@ class Controller():
                 hash_ = hash(str(cells_array))
                 
                 if(hash_ not in dico_archs):
-                    dico_archs[hash_] = mean
+                    dico_archs[hash_] = mean_
                     count+=1
         
-        ##
+        
+        # print dico
+        print(dico)
+        
+        # display dico_archs
+        print(dico_archs)
+        
+        print(len(dico_archs))
+        
+        
+        
+        # display search space size
+        print(self.search_space_size())
+        
+        
+        
+        ##################################################################
         ## Train RNN while sampling children with above defined accuracies
-
+        ##################################################################
+        
         # 4) train RNN
         
 
@@ -717,16 +736,27 @@ class Controller():
                 
                 hash_ = hash(str(cells_array))
                 
+                print("hash_ = "+str(hash_))
+                
+                # if model is in dico_archs
                 if hash_ in dico_archs:
                     acc = dico_archs[hash_]
                 else:
-                    acc = 0.
+                    # for the given freq distri returns an accuracy
+                    acc = random.choices(list(dico.keys()), weights=list(dico.values()))[0]
+                    dico_archs[hash_] = acc
+
+                
+                
+
+                
+                print("acc = "+str(acc))
                 
                 all_accs.append(acc)
         
-                if( len(all_accs) > 10 ):
+                if( len(all_accs) > 100 ):
                 
-                    means_accs.append(mean(all_accs[-10:]))
+                    means_accs.append(mean(all_accs[-100:]))
                     
                     
                     if( (means_accs[-1] - means_accs[0]) > inc):
@@ -734,6 +764,7 @@ class Controller():
                         print("nber of iter to increase acc by "+ str(inc) + " : "+ str(count_iter))
                         return
                     
+                    print("mean[0] = "+str(means_accs[0])+" mean[-1] = "+str(means_accs[-1]))
                     
                 total_sum *= ( acc )
             

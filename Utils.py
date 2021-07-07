@@ -112,9 +112,16 @@ def frequency_distr( nb_quantiles, datas ):
         
         for ele in datas:
             
+            sum_quantile = 0
+            count = 0
+            
             if( ele >= gap*i and ele < gap*(i+1) ):
                 
-                dico[ gap*i + ( gap*(i+1) - gap*i ) / 2 ] += 1/len(datas)
+                sum_quantile += ele
+                
+                count+=1
+                
+            dico[ sum_quantile / count ] += count / len(datas)
         
         
         
