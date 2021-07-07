@@ -648,17 +648,34 @@ class Controller():
             
             
         controller = self.generateController()
+        strategy = tf.distribute.MirroredStrategy()
+
+        ##
+        ##  Draw distribution of accuracy values among archs in search space
         
         # 1) Compute and store accuracies over 100 sampled children !!!!!!!!!!!!!
+        X, y = self.load_shaped_data_train(random=0)
+        accuracies = []
+        for i in range(100):
+
+            cells_array, __ = self.sample_arch(controller)
         
+            with strategy.scope():
+                model = self.get_compiled_cnn_model(cells_array)
+
+            history = self.train_child(X, y, model, 32, nb_child_epochs)
+            val_acc = history.history['val_accuracy'][-1]
+
+            accuracies.append(val_acc)
+
+
+
         # 2) retrieve the freq of distri of accuracies in N quantiles
         N=4
         dico = frequency_distr(N, accuracies)
         
         # 3) loop over dico and build dico_archs
         
-        #     nb_arch_tmp = freq *   # where freq is the value of dico
-        # mean = dico_key = mean of the quartile
         
         
         dico_archs = {}  # each key is a hash of the array representing the arch
@@ -678,10 +695,10 @@ class Controller():
                     dico_archs[hash_] = mean
                     count+=1
         
+        ##
+        ## Train RNN while sampling children with above defined accuracies
+
         # 4) train RNN
-        
-        #       during training sample a child        
-        #                       if hash of sampled child in dico_archs, then retrieve corresponding value
         
 
         # loop forever until mean of accuracies increased by inc
