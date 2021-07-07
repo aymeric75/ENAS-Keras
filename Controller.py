@@ -20,9 +20,9 @@ import decimal
 from statistics import mean
 import h5py
 import tensorflow_addons as tfa
-import Utils
-from Utils import ActivityRegularizationLayer
-from Utils import moving_average, mvaverage, recall_m, precision_m, f1_m, kappa, truncate_float, duplicate_in_array
+#from Utils import ActivityRegularizationLayer
+#from Utils import moving_average, mvaverage, recall_m, precision_m, f1_m, kappa, truncate_float, duplicate_in_array
+from Utils import *
 import matplotlib.pyplot as plt
 
 
@@ -321,7 +321,7 @@ class Controller():
 
     def load_shaped_data_test(self):
 
-        loaded = load_data("./data_conv_training.mat", "./data_conv_testing.mat",clip_value=300)
+        loaded = load_data("../../../../data_conv_training.mat", "../../../../data_conv_testing.mat",clip_value=300)
 
         X_test = loaded[2].transpose((0,2,1))
         y_test = loaded[3]
@@ -525,33 +525,55 @@ class Controller():
         total_weights.close()
 
 
+        
+    # MEASUREMENT TOOLS
 
 
+    def search_space_size(self):
+        
+        return self.num_alt*self.num_block_conv*self.num_block_reduc*self.num_op_conv*self.num_op_reduc
+        
+        
 
-    def best_epoch(self):
+    def best_epoch(self, time_est=0):
+        
+        epochs_child = 20
+        ite=10
         
         # sample and train 10 child archs  on  20 epochs each
 
         # PLOT all eval_loss
 
-        X, y = self.load_shaped_data_train(random=1)
+        X, y = self.load_shaped_data_train(random=0)
 
         controller = self.generateController()
 
         plt.figure()
 
-        for i in range(10):
+        start = time.time()
+        
+        for i in range(ite):
 
             cells_array, __ = self.sample_arch(controller)
-
+            
             strategy = tf.distribute.MirroredStrategy()
             with strategy.scope():
                 model = self.get_compiled_cnn_model(cells_array)
 
-            history = self.train_child(X, y, model, 32, 20)
-            val_loss = history.history['val_loss'][-1]
+            
+            if(time_est==1):
+                epochs_child = 1
+            
+            history = self.train_child(X, y, model, 32, epochs_child)
+            val_loss = history.history['val_loss']
             nbre_epochs = range(len(val_loss))
             plt.plot(nbre_epochs, val_loss, 'b')
+            
+            if(time_est==1):
+                est_time = (time.time()-start)*ite*epochs_child
+                print("estimated time: "+str(est_time)+"s or "+str(int(est_time/60))+" min")
+                
+                return
 
         
         plt.savefig('all_losses.png')
@@ -560,20 +582,23 @@ class Controller():
 
     # check if the train_metric (used during training of each child)
     # "follows" the "final" metrics (kappa score), ie, on the test set
-
+    #
+    
     def match_train_test_metrics(self, train_metric, test_metric, nb_child_epochs):
 
 
 
-        X, y = self.load_shaped_data_train(random=1)
+        X, y = self.load_shaped_data_train(random=0)
 
         X_test, y_test = self.load_shaped_data_test()
 
         controller = self.generateController()
 
         train_metrics = []
+        
+        test_metrics = []
 
-        for i in range(10):
+        for i in range(3):
 
             cells_array, __ = self.sample_arch(controller)
 
@@ -596,21 +621,109 @@ class Controller():
             test_metric_value = 0
             if(test_metric == 'kappa_score'):
                 test_metric_value = metrics.cohen_kappa_score(predictions, real_values)
+            else:
+                test_metric_value = metrics.accuracy_score(predictions, real_values)
 
             test_metrics.append(test_metric_value)
 
 
         plt.figure()
 
-        plt.plot(len(train_metrics), train_metrics, 'b')
+        plt.plot(np.arange(len(train_metrics)), train_metrics, 'o', color='blue')
 
-        plt.plot(len(test_metrics), test_metrics, 'r')
+        plt.plot(np.arange(len(test_metrics)), test_metrics, 'o', color='red')
 
-        plt.savefig('match_test_train_metrics.png')                        
-
-
-
-
+        plt.savefig('match_test_train_metrics.png')
+        
+        
+    # perc  percentage of good arch (in total search space)
+    # inc considered increase of the metrics value
+    # var : variability in accuracy between worst and best values
+    # return nber of necessary iterations meeting the input conditions
+    
+    def test_nb_iterations(self, inc=0.1):
+                
+        if (inc > 0.4 or inc <= 0):
+            raise Exception("Sorry, inc must be < 0.4 and > 0") 
+            
+            
+        controller = self.generateController()
+        
+        # 1) Compute and store accuracies over 100 sampled children !!!!!!!!!!!!!
+        
+        # 2) retrieve the freq of distri of accuracies in N quantiles
+        N=4
+        dico = frequency_distr(N, accuracies)
+        
+        # 3) loop over dico and build dico_archs
+        
+        #     nb_arch_tmp = freq *   # where freq is the value of dico
+        # mean = dico_key = mean of the quartile
+        
+        
+        dico_archs = {}  # each key is a hash of the array representing the arch
+                         # each value is the corresponding accuracy (mean acc)
+        for mean in dico:
+        
+            nb_archs_tmp = int(dico[mean] * self.search_space_size())
+        
+            # build
+            count=0
+            while(count<nb_archs_tmp):
+                
+                cells_array, __ = self.sample_arch(controller)
+                hash_ = hash(str(cells_array))
+                
+                if(hash_ not in dico_archs):
+                    dico_archs[hash_] = mean
+                    count+=1
+        
+        # 4) train RNN
+        
+        #       during training sample a child        
+        #                       if hash of sampled child in dico_archs, then retrieve corresponding value
         
 
+        # loop forever until mean of accuracies increased by inc
+        optimizer = keras.optimizers.SGD(learning_rate=1e-3)
+        all_accs = []
+        means_accs = []
+        count_iter = 0
+        
+        while(1):
+            
+            total_sum=0
+            with tf.GradientTape(persistent=False) as tape:
 
+                cells_array, sum_proba = self.sample_arch(controller)
+                total_sum += sum_proba
+                
+                hash_ = hash(str(cells_array))
+                
+                if hash_ in dico_archs:
+                    acc = dico_archs[hash_]
+                else:
+                    acc = 0.
+                
+                all_accs.append(acc)
+        
+                if( len(all_accs) > 10 ):
+                
+                    means_accs.append(mean(all_accs[-10:]))
+                    
+                    
+                    if( (means_accs[-1] - means_accs[0]) > inc):
+                        
+                        print("nber of iter to increase acc by "+ str(inc) + " : "+ str(count_iter))
+                        return
+                    
+                    
+                total_sum *= ( acc )
+            
+            count_iter+=1
+            grads = tape.gradient(total_sum, controller.trainable_weights)
+            optimizer.apply_gradients(zip(grads, controller.trainable_weights))
+
+
+            
+        

@@ -93,3 +93,36 @@ def duplicate_in_array(array, decimals):
             if(truncate_float(array[i], decimals) == truncate_float(array[i+1], decimals)):
                 return True
     return False
+
+
+# return a dict with keys = mean of considered quantile
+# and values = frequency of the considered quantile
+
+def frequency_distr( nb_quantiles, datas ):
+    
+    gap = 1. / nb_quantiles
+    
+    dico = {}
+    
+    for i in range(nb_quantiles):
+        
+        
+        dico[ gap*i + ( gap*(i+1) - gap*i ) / 2 ] = 0.
+        
+        
+        for ele in datas:
+            
+            if( ele >= gap*i and ele < gap*(i+1) ):
+                
+                dico[ gap*i + ( gap*(i+1) - gap*i ) / 2 ] += 1/len(datas)
+        
+        
+        
+    return dico
+
+
+
+
+
+
+
