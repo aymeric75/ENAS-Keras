@@ -107,21 +107,22 @@ def frequency_distr( nb_quantiles, datas ):
     for i in range(nb_quantiles):
         
         
-        dico[ gap*i + ( gap*(i+1) - gap*i ) / 2 ] = 0.
+        #dico[ sum_quantile / count ] = 0.
         
-        
+        sum_quantile = 0
+        count = 0 # count of elements belonging to the quantile
+
+
         for ele in datas:
-            
-            sum_quantile = 0
-            count = 0
-            
+                        
             if( ele >= gap*i and ele < gap*(i+1) ):
                 
                 sum_quantile += ele
                 
                 count+=1
                 
-            dico[ sum_quantile / count ] += count / len(datas)
+        
+        dico[ sum_quantile / count ] = count / len(datas)
         
         
         
