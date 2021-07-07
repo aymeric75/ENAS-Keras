@@ -640,7 +640,7 @@ class Controller():
     # nb_child_epochs : nb of epochs of child training
     # return nber of necessary iterations meeting the input conditions
     
-    def test_nb_iterations(self, inc=0.2, nb_child_epochs=5):
+    def test_nb_iterations(self, inc=0.16, nb_child_epochs=5):
                 
         if (inc > 0.4 or inc <= 0):
             raise Exception("Sorry, inc must be < 0.4 and > 0") 
@@ -674,7 +674,7 @@ class Controller():
 
 
         # 2) retrieve the freq of distri of accuracies in N quantiles
-        N=2
+        N=3
         dico = frequency_distr(N, accuracies) # { mean_acc : freq }
         
         
@@ -736,7 +736,6 @@ class Controller():
                 
                 hash_ = hash(str(cells_array))
                 
-                print("hash_ = "+str(hash_))
                 
                 # if model is in dico_archs
                 if hash_ in dico_archs:
@@ -757,14 +756,28 @@ class Controller():
                 if( len(all_accs) > 100 ):
                 
                     means_accs.append(mean(all_accs[-100:]))
+
+
+                    if(count_iter > 5200):
+
+
+                        plt.figure()
+                            
+                        plt.plot(np.arange(len(means_accs)), means_accs, 'b')    
+
+                        plt.savefig('incre.png')
+
+                        return
+
                     
                     
                     if( (means_accs[-1] - means_accs[0]) > inc):
                         
                         print("nber of iter to increase acc by "+ str(inc) + " : "+ str(count_iter))
+
                         return
                     
-                    print("mean[0] = "+str(means_accs[0])+" mean[-1] = "+str(means_accs[-1]))
+                    #print("mean[0] = "+str(means_accs[0])+" mean[-1] = "+str(means_accs[-1]))
                     
                 total_sum *= ( acc )
             

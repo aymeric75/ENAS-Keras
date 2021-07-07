@@ -122,7 +122,8 @@ def frequency_distr( nb_quantiles, datas ):
                 count+=1
                 
         
-        dico[ sum_quantile / count ] = count / len(datas)
+        if(count>0):
+            dico[ sum_quantile / count ] = count / len(datas)
         
         
         
