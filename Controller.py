@@ -640,7 +640,7 @@ class Controller():
     # nb_child_epochs : nb of epochs of child training
     # return nber of necessary iterations meeting the input conditions
     
-    def test_nb_iterations(self, inc=0.1, nb_child_epochs=5):
+    def test_nb_iterations(self, inc=0.2, nb_child_epochs=5):
                 
         if (inc > 0.4 or inc <= 0):
             raise Exception("Sorry, inc must be < 0.4 and > 0") 
@@ -670,11 +670,11 @@ class Controller():
             accuracies.append(val_acc)
         """
         
-        accuracies = [ 0.7, 0.2, 0.5, 0.9, 0.8, 0.6 ]
+        accuracies = [ 0.2, 0.8, 0.8, 0.8, 0.9, 0.7, 0.1 ]
 
 
         # 2) retrieve the freq of distri of accuracies in N quantiles
-        N=4
+        N=2
         dico = frequency_distr(N, accuracies) # { mean_acc : freq }
         
         
