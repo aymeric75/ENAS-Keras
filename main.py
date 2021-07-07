@@ -14,7 +14,7 @@ def main():
 
 	#controller.best_epoch()
 
-	controller.match_train_test_metrics("val_accuracy", "kappa_score", 5)
+	#controller.match_train_test_metrics("val_accuracy", "kappa_score", 5)
 
 	#controller.train()
 
