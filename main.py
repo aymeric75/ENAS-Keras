@@ -25,6 +25,9 @@ def main():
     # controller.match_train_test_metrics("val_accuracy", "accuracy_score", nb_child_epochs=5)
 	print(frequency_distr(3, [0.1, 0.2, 0.5, 0.7, 0.1, 0.3]))
     
+    accuracies = [ 0.2, 0.8, 0.8, 0.8, 0.9, 0.7, 0.1 ]
+    
+    print(frequency_distr(3, accuracies))
     
 	#print(controller.test_nb_iterations())
 	#controller.test_nb_iterations()
