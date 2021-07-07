@@ -23,11 +23,11 @@ def main():
     # sample and train 10 children on nb_child_epochs, plot the val_acc from train set (blue) 
     # and the acc_score on test set (red) on same graph 'match_test_train_metrics'
     # controller.match_train_test_metrics("val_accuracy", "accuracy_score", nb_child_epochs=5)
-	#print(frequency_distr(3, [0.1, 0.2, 0.5, 0.7, 0.1, 0.3]))
+	print(frequency_distr(3, [0.1, 0.2, 0.5, 0.7, 0.1, 0.3]))
     
     
 	#print(controller.test_nb_iterations())
-	controller.test_nb_iterations()
+	#controller.test_nb_iterations()
 
 	# sample PUIS 
 
