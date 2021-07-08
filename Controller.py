@@ -737,13 +737,14 @@ class Controller():
                 
                     means_accs.append(mean(all_accs[-50:]))
 
-
+                    print("iter: "+str(count_iter)+" mean_acc: "+str(means_accs[-1]))
+                    
                     if(count_iter > 20000):
 
 
                         plt.figure()
                             
-                        plt.plot(np.arange(len(all_accs)), all_accs, 'b')    
+                        plt.plot(np.arange(len(means_accs)), means_accs, 'b')    
 
                         plt.savefig('incre.png')
 

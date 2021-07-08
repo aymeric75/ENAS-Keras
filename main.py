@@ -31,7 +31,6 @@ def main():
 
 
 
-	return
 
 	controller = Controller(num_block_conv=num_block_conv, num_block_reduc=num_block_reduc, num_op_conv=7, num_op_reduc=2, num_alt=num_alt, scheme=2)
 
