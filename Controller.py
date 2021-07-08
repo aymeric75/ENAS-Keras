@@ -730,7 +730,6 @@ class Controller():
                 
 
                 
-                print("acc = "+str(acc))
                 
                 all_accs.append(acc)
         
