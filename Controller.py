@@ -670,11 +670,11 @@ class Controller():
             accuracies.append(val_acc)
         """
         
-        accuracies = [ 0.2, 0.8, 0.8, 0.8, 0.9, 0.7, 0.1 ]
+        accuracies = [ 0.2, 0.8, 0.8, 0.8, 0.9, 0.7, 0.2 ]
 
 
         # 2) retrieve the freq of distri of accuracies in N quantiles
-        N=3
+        N=2
         dico = frequency_distr(N, accuracies) # { mean_acc : freq }
         
         
@@ -682,35 +682,15 @@ class Controller():
         
         dico_archs = {}  # each key is a hash of the array representing the arch
                          # each value is the corresponding accuracy (mean acc)
-        for mean_ in dico:
-        
-            nb_archs_tmp = int(dico[mean_] * self.search_space_size())
-        
-            # build
-            count=0
-            while(count<nb_archs_tmp):
-                
-                cells_array, __ = self.sample_arch(controller)
-                hash_ = hash(str(cells_array))
-                
-                if(hash_ not in dico_archs):
-                    dico_archs[hash_] = mean_
-                    count+=1
         
         
         # print dico
         print(dico)
         
-        # display dico_archs
-        print(dico_archs)
-        
-        print(len(dico_archs))
-        
         
         
         # display search space size
         print(self.search_space_size())
-        
         
         
         ##################################################################
@@ -721,7 +701,7 @@ class Controller():
         
 
         # loop forever until mean of accuracies increased by inc
-        optimizer = keras.optimizers.SGD(learning_rate=1e-3)
+        optimizer = keras.optimizers.SGD(learning_rate=1e-2)
         all_accs = []
         means_accs = []
         count_iter = 0
@@ -740,11 +720,12 @@ class Controller():
                 # if model is in dico_archs
                 if hash_ in dico_archs:
                     acc = dico_archs[hash_]
+                    #print("IIIIIIIICCCCCCCCCCCCCCCCIIIIIIIIIIIIIII")
                 else:
                     # for the given freq distri returns an accuracy
                     acc = random.choices(list(dico.keys()), weights=list(dico.values()))[0]
                     dico_archs[hash_] = acc
-
+                    #print("LAAAAAAAAAAAAAAAAAAAAAAAAA")
                 
                 
 
@@ -753,29 +734,26 @@ class Controller():
                 
                 all_accs.append(acc)
         
-                if( len(all_accs) > 100 ):
+                if( len(all_accs) > 50 ):
                 
-                    means_accs.append(mean(all_accs[-100:]))
+                    means_accs.append(mean(all_accs[-50:]))
 
 
-                    if(count_iter > 5200):
+                    if(count_iter > 20000):
 
 
                         plt.figure()
                             
-                        plt.plot(np.arange(len(means_accs)), means_accs, 'b')    
+                        plt.plot(np.arange(len(all_accs)), all_accs, 'b')    
 
                         plt.savefig('incre.png')
 
                         return
-
                     
                     
-                    if( (means_accs[-1] - means_accs[0]) > inc):
-                        
-                        print("nber of iter to increase acc by "+ str(inc) + " : "+ str(count_iter))
-
-                        return
+                    # if( (means_accs[-1] - means_accs[0]) > inc):
+                    #     print("nber of iter to increase acc by "+ str(inc) + " : "+ str(count_iter))
+                    #     return
                     
                     #print("mean[0] = "+str(means_accs[0])+" mean[-1] = "+str(means_accs[-1]))
                     

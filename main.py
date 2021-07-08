@@ -1,15 +1,23 @@
 from Controller import *
 from Utils import *
+import numpy as np
 
 def main():
+
+
+	print(np.__version__)
+
+
+	return
+
 
 	num_block_conv=2
 	num_block_reduc=1
 
-	num_alt=2
+	num_alt=1
 
 
-	controller = Controller(num_block_conv=num_block_conv, num_block_reduc=num_block_reduc, num_op_conv=8, num_op_reduc=2, num_alt=num_alt, scheme=2)
+	controller = Controller(num_block_conv=num_block_conv, num_block_reduc=num_block_reduc, num_op_conv=7, num_op_reduc=2, num_alt=num_alt, scheme=2)
 
 	#controller.train(epochs=5, epochs_child=2)
 
