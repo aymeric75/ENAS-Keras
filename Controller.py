@@ -674,7 +674,7 @@ class Controller():
 
 
         # 2) retrieve the freq of distri of accuracies in N quantiles
-        N=3
+        N=2
         dico = frequency_distr(N, accuracies) # { mean_acc : freq }
         
         
@@ -749,7 +749,6 @@ class Controller():
                 
 
                 
-                print("acc = "+str(acc))
                 
                 all_accs.append(acc)
         
@@ -758,7 +757,7 @@ class Controller():
                     means_accs.append(mean(all_accs[-100:]))
 
 
-                    if(count_iter > 5200):
+                    if(count_iter > 20000):
 
 
                         plt.figure()

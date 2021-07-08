@@ -1,5 +1,7 @@
 from Controller import *
 from Utils import *
+import numpy as np
+import tensorflow as tf
 
 def main():
 
@@ -7,6 +9,13 @@ def main():
 	num_block_reduc=1
 
 	num_alt=2
+    
+
+	print(np.__version__)
+
+
+    config = tf.ConfigProto()
+    config.gpu_options.allow_growth = True
 
 
 	controller = Controller(num_block_conv=num_block_conv, num_block_reduc=num_block_reduc, num_op_conv=8, num_op_reduc=2, num_alt=num_alt, scheme=2)
@@ -27,9 +36,9 @@ def main():
 
 	accuracies = [ 0.2, 0.8, 0.8, 0.8, 0.9, 0.7, 0.1 ]
 
-	print(frequency_distr(3, accuracies))
+	print("ICI")
 
-	print(controller.test_nb_iterations())
+	controller.test_nb_iterations()
 	#controller.test_nb_iterations()
 
 	# sample PUIS 
