@@ -1,10 +1,7 @@
 from Controller import *
 from Utils import *
 import numpy as np
-<<<<<<< HEAD
-=======
 import tensorflow as tf
->>>>>>> ea4db87cbfd57cfc6b7869bbb81ea77c842af808
 
 def main():
 
@@ -18,14 +15,23 @@ def main():
 
 	num_alt=1
 
-	print(np.__version__)
 
 
-    config = tf.ConfigProto()
-    config.gpu_options.allow_growth = True
+	gpus = tf.config.list_physical_devices('GPU')
+	if gpus:
+	  try:
+	    # Currently, memory growth needs to be the same across GPUs
+	    for gpu in gpus:
+	      tf.config.experimental.set_memory_growth(gpu, True)
+	    logical_gpus = tf.config.experimental.list_logical_devices('GPU')
+	    print(len(gpus), "Physical GPUs,", len(logical_gpus), "Logical GPUs")
+	  except RuntimeError as e:
+	    # Memory growth must be set before GPUs have been initialized
+	    print(e)
 
 
-    return
+
+	return
 
 	controller = Controller(num_block_conv=num_block_conv, num_block_reduc=num_block_reduc, num_op_conv=7, num_op_reduc=2, num_alt=num_alt, scheme=2)
 
