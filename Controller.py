@@ -645,7 +645,6 @@ class Controller():
         if (inc > 0.4 or inc <= 0):
             raise Exception("Sorry, inc must be < 0.4 and > 0") 
             
-            
         controller = self.generateController()
         strategy = tf.distribute.MirroredStrategy()
 
