@@ -640,7 +640,7 @@ class Controller():
     # nb_child_epochs : nb of epochs of child training
     # return nber of necessary iterations meeting the input conditions
     
-    def test_nb_iterations(self, inc=0.16, nb_child_epochs=5):
+    def test_nb_iterations(self, file_accs = 'accuracies.txt', inc=0.16, nb_child_epochs=5, mva=500, limit=30000):
                 
         if (inc > 0.4 or inc <= 0):
             raise Exception("Sorry, inc must be < 0.4 and > 0") 
@@ -652,24 +652,19 @@ class Controller():
         ##  Draw distribution of accuracy values among archs in search space
         ####################################################################
         
-        # 1) Compute and store accuracies over 100 sampled children
-        """
-        X, y = self.load_shaped_data_train(random=0)
+        f = open('accuracies.txt', 'r')
+        lines = f.readlines()
         accuracies = []
-        for i in range(3):
-
-            cells_array, __ = self.sample_arch(controller)
+        for line in lines:
+            accuracies.append(float(line))
+            
+        f.close()
         
-            with strategy.scope():
-                model = self.get_compiled_cnn_model(cells_array)
-
-            history = self.train_child(X, y, model, 32, nb_child_epochs)
-            val_acc = history.history['val_accuracy'][-1]
-
-            accuracies.append(val_acc)
-        """
+    
+        print(accuracies)
         
-        accuracies = [ 0.2, 0.8, 0.8, 0.8, 0.9, 0.7, 0.2 ]
+                
+        #accuracies = [ 0.2, 0.8, 0.8, 0.8, 0.9, 0.7, 0.2 ]
 
 
         # 2) retrieve the freq of distri of accuracies in N quantiles
@@ -705,7 +700,7 @@ class Controller():
         means_accs = []
         count_iter = 0
         
-        while(1):
+        while(count_iter < limit):
             
             total_sum=0
             with tf.GradientTape(persistent=False) as tape:
@@ -719,36 +714,29 @@ class Controller():
                 # if model is in dico_archs
                 if hash_ in dico_archs:
                     acc = dico_archs[hash_]
-                    #print("IIIIIIIICCCCCCCCCCCCCCCCIIIIIIIIIIIIIII")
                 else:
                     # for the given freq distri returns an accuracy
                     acc = random.choices(list(dico.keys()), weights=list(dico.values()))[0]
                     dico_archs[hash_] = acc
-                    #print("LAAAAAAAAAAAAAAAAAAAAAAAAA")
-                
-                
-
-                
+                                
                 
                 all_accs.append(acc)
         
-                if( len(all_accs) > 50 ):
+                if( len(all_accs) > mva ):
                 
-                    means_accs.append(mean(all_accs[-50:]))
+                    means_accs.append(mean(all_accs[-mva:]))
 
                     print("iter: "+str(count_iter)+" mean_acc: "+str(means_accs[-1]))
                     
-                    if(count_iter > 20000):
-
+                    if(count_iter % 1000):
 
                         plt.figure()
                             
-                        plt.plot(np.arange(len(means_accs)), means_accs, 'b')    
+                        plt.plot(np.arange(len(means_accs))+mva, means_accs, 'b')    
 
+                        plt.title("Moving average with lag of "+str(mva))
                         plt.savefig('incre.png')
 
-                        return
-                    
                     
                     # if( (means_accs[-1] - means_accs[0]) > inc):
                     #     print("nber of iter to increase acc by "+ str(inc) + " : "+ str(count_iter))
@@ -758,10 +746,67 @@ class Controller():
                     
                 total_sum *= ( acc )
             
+            
+            if(means_accs[-1] - means_accs[0] > inc):
+                print(str(counter_iter)+" iterations were needed for an increase of "+str(inc)+" of the moving average")
+            
             count_iter+=1
             grads = tape.gradient(total_sum, controller.trainable_weights)
             optimizer.apply_gradients(zip(grads, controller.trainable_weights))
+        
+        return
+        
+    # compute and store nber accuracies
+    # in file accuracies.txt
+        
+    def compute_accuracies(self, nber, nb_child_epochs, print_file=0):
 
+        controller = self.generateController()
+        
+        strategy = tf.distribute.MirroredStrategy()
+        
+        print("strategy")
+        
+        print(strategy)
+        
+        X, y = self.load_shaped_data_train(random=0)
+        accuracies = []
+        
+        start_time = time.time()
+        
+        for i in range(nber):
 
+            print("training child: "+str(i)+ ", time passed: "+str(time.time() - start_time)+"s")
             
+            cells_array, __ = self.sample_arch(controller)
+
+            with strategy.scope():
+                x = tf.Variable(1.)
+                model = self.get_compiled_cnn_model(cells_array)
+        
+        
+            print(x)
+            
+                
+            return
+        
+
+            history = self.train_child(X, y, model, 32, nb_child_epochs)
+            val_acc = history.history['val_accuracy'][-1]
+
+            accuracies.append(val_acc)
+
+            if( print_file==1 ):
+                with open("accuracies.txt", "a") as f:
+                    f.write(str(val_acc)+"\n")
+        
+        est_time = time.time() - start_time
+
+        print("estimated time for 5000 iterations: "+str(est_time*500)+"s, or "+str((est_time*500)/60)+"mins, or "+str((est_time*500)/(60*60))+" hours, or "+ str((est_time*500)/(60*60*24)) +" days."   )
+                
+        
+        
+        
+        
+        
         
