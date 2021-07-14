@@ -25,6 +25,7 @@ import tensorflow_addons as tfa
 from Utils import *
 import matplotlib.pyplot as plt
 import random
+import json
 
 def load_data(trainingPath, validationPath, clip_value=300):
 
@@ -410,10 +411,9 @@ class Controller():
 
 
 
-    def train_child(self, X, y, model, batch_size, epochs_child):
+    def train_child(self, X, y, model, batch_size, epochs_child, options):
                     
-        options = tf.data.Options()
-        options.experimental_distribute.auto_shard_policy = tf.data.experimental.AutoShardPolicy.OFF
+
 
         X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=0.1, shuffle=True)
         train_data = tf.data.Dataset.from_tensor_slices((X_train, y_train))
@@ -457,6 +457,7 @@ class Controller():
         mean_acc = []
         
         strategy = tf.distribute.MirroredStrategy()
+
         #print('Number of devices: {}'.format(strategy.num_replicas_in_sync))
 
         total_weights = h5py.File("total_weights.h5", "w")
@@ -759,21 +760,32 @@ class Controller():
     # compute and store nber accuracies
     # in file accuracies.txt
         
-    def compute_accuracies(self, nber, nb_child_epochs, print_file=0):
+    def compute_accuracies(self, nber, nb_child_epochs, strategy, global_batch_size=64, print_file=0):
 
+        
         controller = self.generateController()
         
-        strategy = tf.distribute.MirroredStrategy()
+        print("number of replicas 2 : "+str(strategy.num_replicas_in_sync))
         
-        print("strategy")
         
-        print(strategy)
-        
-        X, y = self.load_shaped_data_train(random=0)
         accuracies = []
         
         start_time = time.time()
         
+        cells_array, __ = self.sample_arch(controller)
+
+        with strategy.scope():
+
+            X, y = self.load_shaped_data_train(random=0)
+            
+            options = tf.data.Options()
+            options.experimental_distribute.auto_shard_policy = tf.data.experimental.AutoShardPolicy.OFF
+            
+            model = self.get_compiled_cnn_model(cells_array)
+
+        history = self.train_child(X, y, model, global_batch_size, nb_child_epochs, options)
+            
+        """ 
         for i in range(nber):
 
             print("training child: "+str(i)+ ", time passed: "+str(time.time() - start_time)+"s")
@@ -781,17 +793,12 @@ class Controller():
             cells_array, __ = self.sample_arch(controller)
 
             with strategy.scope():
-                x = tf.Variable(1.)
                 model = self.get_compiled_cnn_model(cells_array)
         
-        
-            print(x)
-            
-                
-            return
-        
 
-            history = self.train_child(X, y, model, 32, nb_child_epochs)
+            print ('Number of devices: {}'.format(strategy.num_replicas_in_sync))
+
+            history = self.train_child(X, y, model, global_batch_size, nb_child_epochs, options)
             val_acc = history.history['val_accuracy'][-1]
 
             accuracies.append(val_acc)
@@ -802,11 +809,14 @@ class Controller():
         
         est_time = time.time() - start_time
 
-        print("estimated time for 5000 iterations: "+str(est_time*500)+"s, or "+str((est_time*500)/60)+"mins, or "+str((est_time*500)/(60*60))+" hours, or "+ str((est_time*500)/(60*60*24)) +" days."   )
+        """
+        
+        
+        
+        
+        
+        
+        #print("estimated time for 5000 iterations: "+str(est_time*500)+"s, or "+str((est_time*500)/60)+"mins, or "+str((est_time*500)/(60*60))+" hours, or "+ str((est_time*500)/(60*60*24)) +" days."   )
                 
-        
-        
-        
-        
         
         
