@@ -52,7 +52,7 @@ def load_data(trainingPath, validationPath, clip_value=300):
 
 class Controller():
 
-    def __init__(self, num_block_conv=2 , num_block_reduc=2, num_op_conv=5, num_op_reduc=2, num_alt=5, scheme=1):
+    def __init__(self, num_block_conv=2 , num_block_reduc=2, num_op_conv=5, num_op_reduc=2, num_alt=5, scheme=1, path_train="./data_conv_training.mat", path_test="./data_conv_testing.mat"):
 
 
         self.num_block_conv = num_block_conv      # Number of blocks (one block = 2 inputs/2 operators) per conv Cell
@@ -69,8 +69,9 @@ class Controller():
 
         self.scheme = scheme
 
+        self.path_train = path_train
 
-
+        self.path_test = path_test
 
     # new 'sampling' function, only return an integer (to feed the Embedding layer)
     def sampling(self, x, depth):
@@ -309,7 +310,7 @@ class Controller():
             
         else:
 
-            loaded = load_data("../../../../data_conv_training.mat", "../../../../data_conv_testing.mat",clip_value=300)
+            loaded = load_data(self.path_train, self.path_test, clip_value=300)
             X = loaded[0].transpose((0,2,1)) # eeg training
             y = loaded[1] 
             y = keras.utils.to_categorical(y, num_classes=2)
@@ -759,14 +760,14 @@ class Controller():
         
     # compute and store nber accuracies
     # in file accuracies.txt
-        
+    # and displays stats
     def compute_accuracies(self, nber, nb_child_epochs, strategy, global_batch_size=64, print_file=0):
 
         
         controller = self.generateController()
         
-        print("number of replicas 2 : "+str(strategy.num_replicas_in_sync))
-        
+        print ('Number of devices: {}'.format(strategy.num_replicas_in_sync))
+
         
         accuracies = []
         
@@ -774,49 +775,41 @@ class Controller():
         
         cells_array, __ = self.sample_arch(controller)
 
-        with strategy.scope():
+        
+        X, y = self.load_shaped_data_train(random=0)
 
-            X, y = self.load_shaped_data_train(random=0)
-            
-            options = tf.data.Options()
-            options.experimental_distribute.auto_shard_policy = tf.data.experimental.AutoShardPolicy.OFF
-            
-            model = self.get_compiled_cnn_model(cells_array)
+        options = tf.data.Options()
+        options.experimental_distribute.auto_shard_policy = tf.data.experimental.AutoShardPolicy.OFF
 
-        history = self.train_child(X, y, model, global_batch_size, nb_child_epochs, options)
-            
-        """ 
+    
+        start_time = time.time()
+    
         for i in range(nber):
 
-            print("training child: "+str(i)+ ", time passed: "+str(time.time() - start_time)+"s")
-            
+            start_time_tmp = time.time()
+                        
             cells_array, __ = self.sample_arch(controller)
 
             with strategy.scope():
                 model = self.get_compiled_cnn_model(cells_array)
-        
-
-            print ('Number of devices: {}'.format(strategy.num_replicas_in_sync))
 
             history = self.train_child(X, y, model, global_batch_size, nb_child_epochs, options)
             val_acc = history.history['val_accuracy'][-1]
 
             accuracies.append(val_acc)
+            
+            print("training child: "+str(i)+ ", time passed: "+str(time.time() - start_time_tmp)+"s")
 
             if( print_file==1 ):
                 with open("accuracies.txt", "a") as f:
                     f.write(str(val_acc)+"\n")
         
         est_time = time.time() - start_time
-
-        """
+        
+        print("training time per child: "+str(est_time/nber)+" s")
         
         
-        
-        
-        
-        
-        #print("estimated time for 5000 iterations: "+str(est_time*500)+"s, or "+str((est_time*500)/60)+"mins, or "+str((est_time*500)/(60*60))+" hours, or "+ str((est_time*500)/(60*60*24)) +" days."   )
+        print("estimated time for 5000 iterations: "+str((est_time/nber)*5000)+"s, or "+str(((est_time/nber)*5000)/60)+"mins, or "+str(((est_time/nber)*5000)/(60*60))+" hours, or "+ str(((est_time/nber)*5000)/(60*60*24)) +" days."   )
                 
         
         

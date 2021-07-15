@@ -3,11 +3,16 @@ import sys
 import json
 import time
 
+if(sys.argv[1] == "multinodes" and sys.argv[2] == 0):
+    os.environ["CUDA_VISIBLE_DEVICES"]="-1"
+    os.environ.pop('TF_CONFIG', None)
+
+if(sys.argv[1] == "multinodes" and sys.argv[2] == 1):
+    time.sleep(10)
+
 
 if (sys.argv[1] == "multinodes"):
 
-    os.environ["CUDA_VISIBLE_DEVICES"]="-1"
-    os.environ.pop('TF_CONFIG', None)
     if '.' not in sys.path:
         sys.path.insert(0, '.')
 
@@ -28,8 +33,8 @@ import tensorflow as tf
 
 
 if (sys.argv[1] == "multinodes"):
-    os.environ['NCCL_DEBUG'] = 'INFO'
-    os.environ['CUDA_VISIBLE_DEVICES'] = "0,1,2,3"
+    #os.environ['NCCL_DEBUG'] = 'INFO'
+    os.environ['CUDA_VISIBLE_DEVICES'] = "0"
     strategy = tf.distribute.MultiWorkerMirroredStrategy()
 
     
@@ -51,7 +56,7 @@ def main():
 
 
 
-    controller = Controller(num_block_conv=num_block_conv, num_block_reduc=num_block_reduc, num_op_conv=7, num_op_reduc=2, num_alt=num_alt, scheme=2)
+    controller = Controller(num_block_conv=num_block_conv, num_block_reduc=num_block_reduc, num_op_conv=7, num_op_reduc=2, num_alt=num_alt, scheme=2, path_train="./data_conv_training.mat", path_test="./data_conv_testing.mat")
 
     #controller.train(epochs=5, epochs_child=2)
 
@@ -69,7 +74,8 @@ def main():
 
     #controller.test_nb_iterations(mva=500)
     
-    per_worker_batch_size = 64
+    per_worker_batch_size = 256
+    
     
     if (sys.argv[1] == "multinodes"):
 
@@ -84,6 +90,8 @@ def main():
         
     
     print("num_replicas_in_sync : "+str(strategy.num_replicas_in_sync))
+    
+    print("per_worker_batch_size : "+str(per_worker_batch_size))
     
     controller.compute_accuracies(5, 5, strategy, global_batch_size, print_file=0)
     
