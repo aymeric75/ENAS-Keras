@@ -26,6 +26,7 @@ from Utils import *
 import matplotlib.pyplot as plt
 import random
 import json
+import datetime
 
 def load_data(trainingPath, validationPath, clip_value=300):
 
@@ -433,7 +434,7 @@ class Controller():
                 validation_data=val_data,
                 epochs=epochs_child,
                 batch_size=batch_size,
-                #callbacks=[callback],
+                #callbacks=callbacks,
                 verbose=1,
                 #class_weight=class_weight,
                 #validation_split=0.1
@@ -537,9 +538,9 @@ class Controller():
         
         
 
-    def best_epoch(self, time_est=0):
+    def best_epoch(self, global_batch_size=64):
         
-        epochs_child = 20
+        nb_child_epochs = 20
         ite=10
         
         # sample and train 10 child archs  on  20 epochs each
@@ -548,6 +549,10 @@ class Controller():
 
         X, y = self.load_shaped_data_train(random=0)
 
+        options = tf.data.Options()
+        options.experimental_distribute.auto_shard_policy = tf.data.experimental.AutoShardPolicy.OFF
+
+        
         controller = self.generateController()
 
         plt.figure()
@@ -562,21 +567,10 @@ class Controller():
             with strategy.scope():
                 model = self.get_compiled_cnn_model(cells_array)
 
-            
-            if(time_est==1):
-                epochs_child = 1
-            
-            history = self.train_child(X, y, model, 32, epochs_child)
+            history = self.train_child(X, y, model, global_batch_size, nb_child_epochs, options)
             val_loss = history.history['val_loss']
             nbre_epochs = range(len(val_loss))
             plt.plot(nbre_epochs, val_loss, 'b')
-            
-            if(time_est==1):
-                est_time = (time.time()-start)*ite*epochs_child
-                print("estimated time: "+str(est_time)+"s or "+str(int(est_time/60))+" min")
-                
-                return
-
         
         plt.savefig('all_losses.png')
 
@@ -659,9 +653,10 @@ class Controller():
         accuracies = []
         for line in lines:
             accuracies.append(float(line))
-            
         f.close()
         
+        if ( len(accuracies) < 100 ):
+            raise Exception("Sorry, you need at least 100 accuracies to sample from a 'realistic' distribution") 
     
         print(accuracies)
         
@@ -785,6 +780,10 @@ class Controller():
         start_time = time.time()
     
         for i in range(nber):
+            
+            #log_dir = "logs/fit/" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+            #tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir=log_dir, histogram_freq=1)
+
 
             start_time_tmp = time.time()
                         
@@ -793,9 +792,11 @@ class Controller():
             with strategy.scope():
                 model = self.get_compiled_cnn_model(cells_array)
 
+            #callbacks=[tensorboard_callback]
+            
             history = self.train_child(X, y, model, global_batch_size, nb_child_epochs, options)
             val_acc = history.history['val_accuracy'][-1]
-
+            del model
             accuracies.append(val_acc)
             
             print("training child: "+str(i)+ ", time passed: "+str(time.time() - start_time_tmp)+"s")
@@ -803,6 +804,8 @@ class Controller():
             if( print_file==1 ):
                 with open("accuracies.txt", "a") as f:
                     f.write(str(val_acc)+"\n")
+            
+        
         
         est_time = time.time() - start_time
         

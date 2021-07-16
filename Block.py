@@ -64,8 +64,8 @@ class Block():
                 layers.Conv2D(10, (2, 10), dilation_rate=4, padding="same", activation='relu', name=self.name+"-2_10_dl-4"),
                 layers.Conv2D(10, (8, 1), padding="same", activation='relu', name=self.name+"-8_1"),            
                 layers.Conv2D(10, (1, 900), padding="same", activation='relu', name=self.name+"-1_900"),
-                layers.Dropout(0.2, name=self.name+"-dropout"),
-                layers.LeakyReLU(name=self.name+"-leaky")
+                layers.Dropout(0.2, name=self.name+"-dropout")
+                #layers.LeakyReLU(name=self.name+"-leaky")
         ]
 
 
