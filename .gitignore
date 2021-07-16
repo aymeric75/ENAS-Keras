@@ -5,3 +5,4 @@
 total_weights.h5
 __pycache__/
 *core.*
+logs/
