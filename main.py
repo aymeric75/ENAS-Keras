@@ -95,11 +95,15 @@ def main():
     print("per_worker_batch_size : "+str(per_worker_batch_size))
     
     # 2)
-    controller_instance.best_epoch(global_batch_size)
+    #controller_instance.best_epoch(strategy, global_batch_size)
 
+    # 3)
+    controller_instance.match_train_test_metrics("val_accuracy", "kappa_score", 3, strategy, global_batch_size)
     
     exit()
-    controller_instance.compute_accuracies(100, 5, strategy, global_batch_size, print_file=1)
+    
+    # 4)
+    controller_instance.compute_accuracies(100, 3, strategy, global_batch_size, print_file=1)
     
 
     # sample and train 10 children on nb_child_epochs, plot the val_acc from train set (blue) 

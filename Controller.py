@@ -324,7 +324,7 @@ class Controller():
 
     def load_shaped_data_test(self):
 
-        loaded = load_data("../../../../data_conv_training.mat", "../../../../data_conv_testing.mat",clip_value=300)
+        loaded = load_data("./data_conv_training.mat", "./data_conv_testing.mat",clip_value=300)
 
         X_test = loaded[2].transpose((0,2,1))
         y_test = loaded[3]
@@ -538,7 +538,7 @@ class Controller():
         
         
 
-    def best_epoch(self, global_batch_size=64):
+    def best_epoch(self, strategy, global_batch_size=64):
         
         nb_child_epochs = 20
         ite=10
@@ -563,12 +563,12 @@ class Controller():
 
             cells_array, __ = self.sample_arch(controller)
             
-            strategy = tf.distribute.MirroredStrategy()
             with strategy.scope():
                 model = self.get_compiled_cnn_model(cells_array)
 
             history = self.train_child(X, y, model, global_batch_size, nb_child_epochs, options)
             val_loss = history.history['val_loss']
+            del model
             nbre_epochs = range(len(val_loss))
             plt.plot(nbre_epochs, val_loss, 'b')
         
@@ -580,7 +580,7 @@ class Controller():
     # "follows" the "final" metrics (kappa score), ie, on the test set
     #
     
-    def match_train_test_metrics(self, train_metric, test_metric, nb_child_epochs):
+    def match_train_test_metrics(self, train_metric, test_metric, nb_child_epochs, strategy, global_batch_size):
 
 
 
@@ -588,21 +588,23 @@ class Controller():
 
         X_test, y_test = self.load_shaped_data_test()
 
+        options = tf.data.Options()
+        options.experimental_distribute.auto_shard_policy = tf.data.experimental.AutoShardPolicy.OFF
+        
         controller = self.generateController()
 
         train_metrics = []
         
         test_metrics = []
 
-        for i in range(3):
+        for i in range(50):
 
             cells_array, __ = self.sample_arch(controller)
 
-            strategy = tf.distribute.MirroredStrategy()
             with strategy.scope():
                 model = self.get_compiled_cnn_model(cells_array)
 
-            history = self.train_child(X, y, model, 32, nb_child_epochs)
+            history = self.train_child(X, y, model, global_batch_size, nb_child_epochs, options)
             val_acc = history.history[train_metric][-1]
 
             train_metrics.append(val_acc)
@@ -610,9 +612,9 @@ class Controller():
             # then test network on test set
 
             predictions = model.predict(X_test)
+            del model
             predictions = np.argmax(predictions, axis=1)
             real_values = y_test
-
 
             test_metric_value = 0
             if(test_metric == 'kappa_score'):
