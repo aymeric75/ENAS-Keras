@@ -30,6 +30,7 @@ if (sys.argv[1] == "multinodes"):
 
 import tensorflow as tf
 
+        
 
 
 if (sys.argv[1] == "multinodes"):
@@ -45,18 +46,17 @@ if (sys.argv[1] == "onenode"):
 from Controller import *
 from Utils import *
 import numpy as np
-import tensorflow as tf
 
 def main():
 
     
-    num_block_conv=2
+    num_block_conv=3
     num_block_reduc=1
-    num_alt=2
+    num_alt=1
 
 
 
-    controller_instance = Controller(num_block_conv=num_block_conv, num_block_reduc=num_block_reduc, num_op_conv=7, num_op_reduc=2, num_alt=num_alt, scheme=1, path_train="./data_conv_training.mat", path_test="./data_conv_testing.mat")
+    controller_instance = Controller(num_block_conv=num_block_conv, num_block_reduc=num_block_reduc, num_op_conv=7, num_op_reduc=4, num_alt=num_alt, scheme=1, path_train="./data_conv_training.mat", path_test="./data_conv_testing.mat")
     
     #controller = controller_instance.generateController()
     #cells_array, sum_proba = controller_instance.sample_arch(controller)
@@ -94,27 +94,32 @@ def main():
     print("num_replicas_in_sync : "+str(strategy.num_replicas_in_sync))
     print("per_worker_batch_size : "+str(per_worker_batch_size))
     
-    # 2)
-    #controller_instance.best_epoch(strategy, global_batch_size)
-
-    # 3)
-    controller_instance.match_train_test_metrics("val_accuracy", "kappa_score", 3, strategy, global_batch_size)
     
-    exit()
+    #for i in range(10):
+    #    controller_instance.simple_train(20, strategy, i, global_batch_size)
+
+        
+    # 2)
+    #controller_instance.best_epoch(strategy, global_batch_size, nb_child_epochs=10, ite=25)
+    
+        
+    # 3)
+    #controller_instance.match_train_test_metrics("val_accuracy", "kappa_score", 2, strategy, global_batch_size)
+    
+    
     
     # 4)
-    controller_instance.compute_accuracies(100, 3, strategy, global_batch_size, print_file=1)
+    #controller_instance.compute_accuracies(100, 2, strategy, global_batch_size, print_file=1)
     
 
-    # sample and train 10 children on nb_child_epochs, plot the val_acc from train set (blue) 
-    # and the acc_score on test set (red) on same graph 'match_test_train_metrics'
-    # controller.match_train_test_metrics("val_accuracy", "accuracy_score", nb_child_epochs=5)
-    #print(frequency_distr(3, [0.1, 0.2, 0.5, 0.7, 0.1, 0.3]))
-
-    #controller.test_nb_iterations(mva=500)
+    # 5) test for the number of iterations needed to obtain specific increase
+    #controller_instance.test_nb_iterations(inc=0.1, mva1=10, mva2=500, limit=3300)
     
+    # 6) train the RNN and save its weights in Controller_weights_.h5
 
+    train(strategy, epochs=5000, epochs_child=2)
 
+    
 if __name__ == "__main__":
 
     main()

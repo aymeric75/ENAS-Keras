@@ -300,8 +300,10 @@ class Controller():
 
 
 
-    def load_shaped_data_train(self, random=0):
+    def load_shaped_data_train(self, random=0, seed=0):
 
+        if(seed==1):
+            np.random.seed(10)
 
         if(random==1):
 
@@ -413,7 +415,7 @@ class Controller():
 
 
 
-    def train_child(self, X, y, model, batch_size, epochs_child, options):
+    def train_child(self, X, y, model, batch_size, epochs_child, options, callbacks):
                     
 
 
@@ -426,15 +428,18 @@ class Controller():
         train_data = train_data.with_options(options)
         val_data = val_data.with_options(options)
         
-
-        callback = tf.keras.callbacks.EarlyStopping(monitor='loss')
+        call = None
+        
+        if(len(callbacks)>0):
+            call = callbacks
+        
 
         history = model.fit(
                 train_data,
                 validation_data=val_data,
                 epochs=epochs_child,
                 batch_size=batch_size,
-                #callbacks=callbacks,
+                callbacks=call,
                 verbose=1,
                 #class_weight=class_weight,
                 #validation_split=0.1
@@ -444,22 +449,20 @@ class Controller():
         return history     
 
 
-    def train(self, epochs=5, epochs_child=2):
+    def train(self, strategy, epochs=5, epochs_child=2):
 
         
-        X, y = self.load_shaped_data_train(random=1)
+        X, y = self.load_shaped_data_train(random=0)
 
         controller = self.generateController()
 
         sampling_number = 1 # number of arch child to sample at each epoch
 
-        optimizer = keras.optimizers.SGD(learning_rate=1e-3)
+        optimizer = keras.optimizers.SGD(learning_rate=1e-2)
 
         accuracies = []
         mean_acc = []
         
-        strategy = tf.distribute.MirroredStrategy()
-
         #print('Number of devices: {}'.format(strategy.num_replicas_in_sync))
 
         total_weights = h5py.File("total_weights.h5", "w")
@@ -538,13 +541,13 @@ class Controller():
         
         
 
-    def best_epoch(self, strategy, global_batch_size=64):
-        
-        nb_child_epochs = 20
-        ite=10
+    def best_epoch(self, strategy, global_batch_size=64, nb_child_epochs = 20, ite=10):
         
         # sample and train 10 child archs  on  20 epochs each
 
+        
+        #callbacks = [tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=1, )]
+        callbacks = []
         # PLOT all eval_loss
 
         X, y = self.load_shaped_data_train(random=0)
@@ -555,24 +558,91 @@ class Controller():
         
         controller = self.generateController()
 
-        plt.figure()
+        #plt.figure()
+        
+        fig, (ax1, ax2) = plt.subplots(1, 2)
+        
+        ax1.set_ylabel('val_accuracy')
+        
+        ax2.set_ylabel('val_loss')
 
-        start = time.time()
+        max_epochs = []
+        
+        all_arrays = []
+        
+        
+        linestyles = ['-', '--', '-.']
+        
+        colors = ['b', 'g', 'r', 'c', 'm', 'y', 'orange', 'slategray', 'magenta']
+        
+        combis = []
         
         for i in range(ite):
-
+            
+            if(i > 27):
+                break
+            
             cells_array, __ = self.sample_arch(controller)
+            
+            k = 0
+
+            while(cells_array in all_arrays):
+            
+                cells_array, __ = self.sample_arch(controller)
+                
+                k+=1
+                print("k = "+str(k))
+                if(k>10):
+                    return
+                
+            all_arrays.append(cells_array)
             
             with strategy.scope():
                 model = self.get_compiled_cnn_model(cells_array)
 
-            history = self.train_child(X, y, model, global_batch_size, nb_child_epochs, options)
+            history = self.train_child(X, y, model, global_batch_size, nb_child_epochs, options, callbacks)
+            val_accuracy = history.history['val_accuracy']
             val_loss = history.history['val_loss']
             del model
-            nbre_epochs = range(len(val_loss))
-            plt.plot(nbre_epochs, val_loss, 'b')
+            nbre_epochs = range(len(val_accuracy))
+            max_epochs.append(len(val_accuracy))
+            
+            style = None
+            colo = None
+            found = False
+            
+            for sty in linestyles:
+                for col in colors:
+                    if [sty, col] not in combis:
+                        style = sty
+                        colo = col
+                        combis.append([style, colo])
+                        found = True
+                        print("style = "+str(style)+" color = "+str(colo)+" best acc = "+str(max(val_accuracy)))
+                        break
+                if(found == True):
+                    break
+                        
+                        
+            if(colo != None and style != None):
+
+                ax1.plot(nbre_epochs, val_accuracy, linestyle=style, color=colo)
+
+                ax2.plot(nbre_epochs, val_loss, linestyle=style, color=colo)
+                
+                fig.tight_layout(pad=5.0)
+
+                plt.savefig('all_accuracies_losses.png')
+
+                
+
+
         
-        plt.savefig('all_losses.png')
+        print(max_epochs)
+        
+        print(mean(max_epochs))
+        
+        return mean(max_epochs), max_epochs
 
 
 
@@ -587,6 +657,8 @@ class Controller():
         X, y = self.load_shaped_data_train(random=0)
 
         X_test, y_test = self.load_shaped_data_test()
+        
+        callbacks = []
 
         options = tf.data.Options()
         options.experimental_distribute.auto_shard_policy = tf.data.experimental.AutoShardPolicy.OFF
@@ -596,15 +668,18 @@ class Controller():
         train_metrics = []
         
         test_metrics = []
+        
+        
+        
 
-        for i in range(50):
+        for i in range(10):
 
             cells_array, __ = self.sample_arch(controller)
 
             with strategy.scope():
                 model = self.get_compiled_cnn_model(cells_array)
 
-            history = self.train_child(X, y, model, global_batch_size, nb_child_epochs, options)
+            history = self.train_child(X, y, model, global_batch_size, nb_child_epochs, options, callbacks)
             val_acc = history.history[train_metric][-1]
 
             train_metrics.append(val_acc)
@@ -626,19 +701,26 @@ class Controller():
 
 
         plt.figure()
+            
+        plt.plot(np.arange(len(test_metrics)), test_metrics, 'o', color='red', label='test')
 
-        plt.plot(np.arange(len(train_metrics)), train_metrics, 'o', color='blue')
+        plt.plot(np.arange(len(train_metrics)), train_metrics, 'o', color='blue', label='train')
 
-        plt.plot(np.arange(len(test_metrics)), test_metrics, 'o', color='red')
-
+        plt.xlabel("iteration")
+        plt.ylabel("metrics value")
+        
         plt.savefig('match_test_train_metrics.png')
+        
+        print(train_metrics)
+        
+        print(test_metrics)
         
         
     # inc: considered increase of the metrics value
     # nb_child_epochs : nb of epochs of child training
     # return nber of necessary iterations meeting the input conditions
     
-    def test_nb_iterations(self, file_accs = 'accuracies.txt', inc=0.16, nb_child_epochs=5, mva=500, limit=30000):
+    def test_nb_iterations(self, file_accs = 'accuracies.txt', inc=0.16, mva1=10, mva2=500, limit=30000):
                 
         if (inc > 0.4 or inc <= 0):
             raise Exception("Sorry, inc must be < 0.4 and > 0") 
@@ -663,15 +745,13 @@ class Controller():
         print(accuracies)
         
                 
-        #accuracies = [ 0.2, 0.8, 0.8, 0.8, 0.9, 0.7, 0.2 ]
-
 
         # 2) retrieve the freq of distri of accuracies in N quantiles
-        N=2
+        N=100
         dico = frequency_distr(N, accuracies) # { mean_acc : freq }
         
         
-        # 3) loop over dico and build dico_archs
+        # 3) instantiate the dico of archs
         
         dico_archs = {}  # each key is a hash of the array representing the arch
                          # each value is the corresponding accuracy (mean acc)
@@ -696,7 +776,8 @@ class Controller():
         # loop forever until mean of accuracies increased by inc
         optimizer = keras.optimizers.SGD(learning_rate=1e-2)
         all_accs = []
-        means_accs = []
+        means_mva1 = []
+        means_mva2 = []
         count_iter = 0
         
         while(count_iter < limit):
@@ -717,37 +798,47 @@ class Controller():
                     # for the given freq distri returns an accuracy
                     acc = random.choices(list(dico.keys()), weights=list(dico.values()))[0]
                     dico_archs[hash_] = acc
-                                
+                          
+                acc_rew = acc
+                        
+                #if(acc < 0.745):
+                #    acc_rew = 0.1
+                #else:
+                #    #acc_rew = np.exp(10+acc)
+                #    acc_rew = np.exp(5+acc) - 310
                 
                 all_accs.append(acc)
         
-                if( len(all_accs) > mva ):
-                
-                    means_accs.append(mean(all_accs[-mva:]))
 
-                    print("iter: "+str(count_iter)+" mean_acc: "+str(means_accs[-1]))
+                if( len(all_accs) > mva1 ):
+                    means_mva1.append(mean(all_accs[-mva1:]))
+
+                    if(count_iter % 1000):
+                        plt.figure()
+                        plt.plot(np.arange(len(means_mva1))+mva1, means_mva1, 'b')    
+                        #plt.title("Moving average with lag of "+str(mva))
+                        plt.savefig('incre_mva1.png')
+
+        
+                if( len(all_accs) > mva2 ):
+                    means_mva2.append(mean(all_accs[-mva2:]))
+                    print("iter: "+str(count_iter)+" mean_acc with lag of "+str(mva2)+": "+str(means_mva2[-1]))
                     
                     if(count_iter % 1000):
-
                         plt.figure()
-                            
-                        plt.plot(np.arange(len(means_accs))+mva, means_accs, 'b')    
+                        plt.plot(np.arange(len(means_mva2))+mva2, means_mva2, 'b')    
+                        #plt.title("Moving average with lag of "+str(mva))
+                        plt.savefig('incre_mva2.png')
+                    
+                    if(means_mva2[-1] - means_mva2[0] > inc):
+                        print(str(count_iter)+" iterations were needed for an increase of "+str(inc)+" of the moving average")
+                    
 
-                        plt.title("Moving average with lag of "+str(mva))
-                        plt.savefig('incre.png')
-
                     
-                    # if( (means_accs[-1] - means_accs[0]) > inc):
-                    #     print("nber of iter to increase acc by "+ str(inc) + " : "+ str(count_iter))
-                    #     return
                     
-                    #print("mean[0] = "+str(means_accs[0])+" mean[-1] = "+str(means_accs[-1]))
-                    
-                total_sum *= ( acc )
+                total_sum *= ( acc_rew )
             
             
-            if(means_accs[-1] - means_accs[0] > inc):
-                print(str(counter_iter)+" iterations were needed for an increase of "+str(inc)+" of the moving average")
             
             count_iter+=1
             grads = tape.gradient(total_sum, controller.trainable_weights)
@@ -770,14 +861,15 @@ class Controller():
         
         start_time = time.time()
         
-        cells_array, __ = self.sample_arch(controller)
+        #cells_array, __ = self.sample_arch(controller)
 
         
         X, y = self.load_shaped_data_train(random=0)
 
         options = tf.data.Options()
         options.experimental_distribute.auto_shard_policy = tf.data.experimental.AutoShardPolicy.OFF
-
+    
+        callbacks = []
     
         start_time = time.time()
     
@@ -796,8 +888,8 @@ class Controller():
 
             #callbacks=[tensorboard_callback]
             
-            history = self.train_child(X, y, model, global_batch_size, nb_child_epochs, options)
-            val_acc = history.history['val_accuracy'][-1]
+            history = self.train_child(X, y, model, global_batch_size, nb_child_epochs, options, callbacks)
+            val_acc = max(history.history['val_accuracy'])
             del model
             accuracies.append(val_acc)
             
@@ -817,4 +909,43 @@ class Controller():
         print("estimated time for 5000 iterations: "+str((est_time/nber)*5000)+"s, or "+str(((est_time/nber)*5000)/60)+"mins, or "+str(((est_time/nber)*5000)/(60*60))+" hours, or "+ str(((est_time/nber)*5000)/(60*60*24)) +" days."   )
                 
         
+
+        
+    # Train ONE arch from random data and plot val_loss
+    # (used to do experiments on EarlyStopping)
+    def simple_train(self, nb_child_epochs, strategy, name_exp, global_batch_size=64):
+
+        
+        controller = self.generateController()
+        
+        X, y = self.load_shaped_data_train()
+        
+            
+        callbacks = [tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=1, )]
+        
+        #callbacks = []
+        
+        options = tf.data.Options()
+        options.experimental_distribute.auto_shard_policy = tf.data.experimental.AutoShardPolicy.OFF
+
+        cells_array, __ = self.sample_arch(controller)
+        
+        #cells_array = [[4, 5], [0], [3, 6], [0]]
+        
+        plt.figure()
+
+        with strategy.scope():
+            model = self.get_compiled_cnn_model(cells_array)
+
+        history = self.train_child(X, y, model, global_batch_size, nb_child_epochs, options, callbacks)
+
+        val_loss = history.history['val_loss']
+        nbre_epochs = range(len(val_loss))
+        plt.plot(nbre_epochs, val_loss, 'b')
+        
+        plt.savefig("losses_"+str(name_exp)+".png")
+        
+        print("Losses for experiment: "+str(name_exp))
+        for l in val_loss:
+            print(l)
         

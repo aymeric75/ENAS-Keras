@@ -71,7 +71,9 @@ class Block():
 
         reduc_layers = [
             layers.MaxPooling2D(pool_size=(2,2), padding="same", name=self.name+"-pool_2_2"),
-            layers.MaxPooling2D(pool_size=(1, 6), padding="same", name=self.name+"-pool_1_6")
+            layers.MaxPooling2D(pool_size=(1, 6), padding="same", name=self.name+"-pool_1_6"),
+            layers.Conv2D(10, (2, 2), strides=2,  padding="same", activation='relu', name=self.name+"-2_2-strides-2"),
+            layers.Conv2D(10, (1, 6), strides=2,  padding="same", activation='relu', name=self.name+"-1_6-strides-2")
         ]
         
         the_dropout_layer = None
