@@ -91,19 +91,21 @@ class Block():
             self.comb = layers.Add( name = self.name+"_add" )
 
         
+        #print("cell type: "+str(self.cell_type))
+        #print("op2 : "+str(self.op2))
+        #print("input2 : "+str(self.input2))
+        #print("len inputs: "+str(len(self.inputs)))
+        
         if(self.input1 != None and self.input2 == None): # if input1 set to None, just consider input2
             self.output = (the_layers[self.op1])(self.inputs[self.input1])
         
         elif(self.input2 != None and self.input1 == None): # if input2 set to None, just consider input1
             self.output = (the_layers[self.op2])(self.inputs[self.input2])
-         
-        #elif(self.input1 == self.input2 and self.op1 == self.op2): # if inputs and ops same, as if block with one input and one op
         elif( tf.math.equal(self.input1,self.input2) and tf.math.equal(self.op1, self.op2) ):
-                self.output = (the_layers[self.op2])(self.inputs[self.input2])
+            self.output = (the_layers[self.op2])(self.inputs[self.input2])
                 
-        else: # 
-
-                self.output = (self.comb)([(the_layers[self.op1])(self.inputs[self.input1]), (the_layers[self.op2])(self.inputs[self.input2])])
+        else:
+            self.output = (self.comb)([(the_layers[self.op1])(self.inputs[self.input1]), (the_layers[self.op2])(self.inputs[self.input2])])
 
         #print(self.output)
 

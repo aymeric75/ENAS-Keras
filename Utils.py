@@ -1,6 +1,9 @@
 from tensorflow import keras
 from tensorflow.keras import layers
 from keras import backend as K
+import numpy as np
+import math
+from statistics import mean
 
 class ActivityRegularizationLayer(layers.Layer):
     def call(self, inputs):
@@ -134,5 +137,19 @@ def frequency_distr( nb_quantiles, datas ):
 def compute_credits(nodes, hours, nber_gpus):
 
     return 0.000278*nodes*(hours*3600)*(nber_gpus*5)
+
+
+
+def rew_func_nothing(x):
+    
+    return x
+
+def rew_func_exp(x):
+    add=5
+    minus=300
+    return np.exp(add+x) - minus
+
+
+
 
 

@@ -1,0 +1,2 @@
+Joining job 50821043.tier2-p-moab-2.tier2.hpc.kuleuven.be
+/var/spool/torque/mom_priv/jobs/50821043.tier2-p-moab-2.tier2.hpc.kuleuven.be.SC: line 33: 63200 Segmentation fault      (core dumped) python test.py $HOSTS $index > $outfile 2> $errfile

@@ -236,10 +236,9 @@ class Controller():
         return model
 
 
-
-
-
-
+    
+    
+    
     def get_compiled_cnn_model(self, cells_array):
 
 
@@ -253,7 +252,8 @@ class Controller():
         #outputs.append(x)
         x = layers.Conv2D(10, (2, 10), padding="same", activation='relu', name="outside_conv2")(x)
         outputs.append(x)
-
+        
+        
         # loop over the cells and construct the model
         for i, arr in enumerate(cells_array):
 
@@ -271,11 +271,10 @@ class Controller():
 
             else:
 
-                cell = Cell('reduc', cell_inputs=outputs)
+                cell = Cell('reduc', cell_inputs=outputs, scheme=self.scheme)
                 blocks_array = np.array( arr )
                 cell.generateCell(blocks_array, 'reduc', num_cell=i)
                 x = cell.cell_output
-
 
         x = layers.Flatten(name="outside_flatten")(x)
         x = layers.BatchNormalization(name="outside_batchnorm2")(x)
@@ -449,8 +448,9 @@ class Controller():
         return history     
 
 
-    def train(self, strategy, epochs=5, epochs_child=2):
+    def train(self, strategy, global_batch_size, callbacks, rew_func, data_options, nb_child_epochs=2, mva1=10, mva2=500, epochs=5):
 
+      
         
         X, y = self.load_shaped_data_train(random=0)
 
@@ -461,11 +461,26 @@ class Controller():
         optimizer = keras.optimizers.SGD(learning_rate=1e-2)
 
         accuracies = []
-        mean_acc = []
+        means_mva1 = []
+        
+        means_mva2 = []
         
         #print('Number of devices: {}'.format(strategy.num_replicas_in_sync))
 
-        total_weights = h5py.File("total_weights.h5", "w")
+        if os.path.exists("total_weights.h5"):
+            os.remove("total_weights.h5")
+        if os.path.exists("tmp_weights.h5"):
+            os.remove("tmp_weights.h5")
+        if os.path.exists("log_Controller_ema.txt"):
+            os.remove("log_Controller_ema.txt")
+        if os.path.exists("Controller_weights_.h5"):
+            os.remove("Controller_weights_.h5")
+       
+            
+        if not (os.path.isfile('./total_weights.h5')):
+            total_weights = h5py.File("total_weights.h5", "w")
+        
+        start = time.time()
 
         # Loop over the epochs
         for epoch in range(epochs):
@@ -481,21 +496,27 @@ class Controller():
 
                     val_acc = tf.Variable(0)
                     cells_array, sum_proba = self.sample_arch(controller)
+                    
+                    
                     total_sum += sum_proba
 
+                    print(cells_array)
+                    
                     with strategy.scope():
                         model = self.get_compiled_cnn_model(cells_array)
-
+                        
+                        
+                    # load existing weights
                     model.load_weights("total_weights.h5", by_name=True)
-
-                    history = self.train_child(X, y, model, 32, 10)
-                    
+                    # trai child                    
+                    history = self.train_child(X, y, model, global_batch_size, nb_child_epochs, data_options, callbacks)
+                    # save model's weight
                     model.save_weights("tmp_weights.h5")
 
+                    # update total_weights.h
                     tmp_weights =  h5py.File('tmp_weights.h5', 'r')
                     keys_tmp_weights = list(tmp_weights.keys())
                     keys_total_weights = list(total_weights.keys())
-
                     for key in keys_tmp_weights:
                         if key not in keys_total_weights:
                             tmp_weights.copy(tmp_weights[key], total_weights)
@@ -503,21 +524,41 @@ class Controller():
                             del total_weights[key]
                             tmp_weights.copy(tmp_weights[key], total_weights)
                     tmp_weights.close()
-
-                    val_acc = history.history['val_accuracy'][-1]
+                    
+                    val_acc = max(history.history['val_accuracy'])
+                    
+                    acc_rew = rew_func(val_acc)
+                    
                     accuracies.append(val_acc)
 
-                    ema = 0
-                    if (len(accuracies) > 10):
-                        mean_acc.append(mean(accuracies[-10:]))
-                        ema = moving_average(accuracies, 10, type='exponential')
-                        f = open("log_Controller_ENAS2.txt", "a")
-                        f.write("ema: "+str(ema)+" mean_acc = "+str(mean_acc[-1])+" Epoch: "+str(epoch)+ " time: "+ str(time.time() - start)+"\n")
-                        f.close()
-                        
-
+                    print("len acc = "+str(len(accuracies)))
                     
-                    total_sum *= ( val_acc )
+                    ema = 0
+                    if (len(accuracies) > mva1):
+                        print("here1")
+                        means_mva1.append(mean(accuracies[-mva1:]))
+                        ema = moving_average(accuracies, mva1, type='exponential')
+                        f = open("log_Controller_ema.txt", "a")
+                        f.write("ema: "+str(ema)+" mean_acc = "+str(means_mva1[-1])+" Epoch: "+str(epoch)+ " time: "+ str(time.time() - start)+"\n")
+                        f.close()
+
+                        if(epoch % 100):
+                            plt.figure()
+                            plt.plot(np.arange(len(means_mva1))+mva1, means_mva1, 'b')    
+                            plt.savefig('incre_mva1_controller.png')
+                        
+                        
+                    if( len(accuracies) > mva2 ):
+                        print("here2")
+                        means_mva2.append(mean(accuracies[-mva2:]))
+                        if(epoch % 100):
+                            plt.figure()
+                            plt.plot(np.arange(len(means_mva2))+mva2, means_mva2, 'b')    
+                            plt.savefig('incre_mva2_controller.png')            
+                    
+         
+                    
+                    total_sum *= ( acc_rew )
                     del model
 
                 total_sum/=sampling_number
@@ -525,7 +566,7 @@ class Controller():
             grads = tape.gradient(total_sum, controller.trainable_weights)
             optimizer.apply_gradients(zip(grads, controller.trainable_weights))
 
-        if(len(mean_acc)>0):
+        if(epoch % 20):
             controller.save_weights("Controller_weights_.h5")
 
         total_weights.close()
@@ -849,28 +890,24 @@ class Controller():
     # compute and store nber accuracies
     # in file accuracies.txt
     # and displays stats
-    def compute_accuracies(self, nber, nb_child_epochs, strategy, global_batch_size=64, print_file=0):
+    def compute_accuracies(self, nber, nb_child_epochs, strategy, options, weights="Controller_weights_.h5", callbacks = [], global_batch_size=64, print_file=0):
 
         
         controller = self.generateController()
         
+        if(weights != ''):
+            controller.load_weights(weights)
+        
         print ('Number of devices: {}'.format(strategy.num_replicas_in_sync))
 
-        
         accuracies = []
         
         start_time = time.time()
         
         #cells_array, __ = self.sample_arch(controller)
-
         
         X, y = self.load_shaped_data_train(random=0)
 
-        options = tf.data.Options()
-        options.experimental_distribute.auto_shard_policy = tf.data.experimental.AutoShardPolicy.OFF
-    
-        callbacks = []
-    
         start_time = time.time()
     
         for i in range(nber):
@@ -893,8 +930,8 @@ class Controller():
             del model
             accuracies.append(val_acc)
             
-            print("training child: "+str(i)+ ", time passed: "+str(time.time() - start_time_tmp)+"s")
-
+            print("training child: "+str(i)+ ", time passed: "+str(time.time() - start_time_tmp)+"s, mean acc: "+str(mean(accuracies)))            
+            
             if( print_file==1 ):
                 with open("accuracies.txt", "a") as f:
                     f.write(str(val_acc)+"\n")
