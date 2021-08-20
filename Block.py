@@ -36,7 +36,7 @@ def randomgen():
 
 class Block():
 
-    def __init__(self, name='', input1='', input2='', op1 = '', op2 = '', comb = 'add', output = '', inputs='', cell_type='conv', name_cell='', num_cell=''):
+    def __init__(self, name='', input1='', input2='', op1 = '', op2 = '', comb = 'add', output = '', inputs='', cell_type='conv', name_cell='', num_cell='', num_filters='', num_block=''):
 
         self.name = name
         self.input1 = input1
@@ -49,31 +49,33 @@ class Block():
         self.cell_type = cell_type
         self.name_cell = name_cell
         self.num_cell = num_cell
-
-
+        self.num_filters = num_filters
+        self.num_block = num_block
 
         
     def construct(self):
 
+        
 
         # TO be defined elsewhere
         conv_layers = [
-                layers.Conv2D(10, (2, 10), padding="same", activation='relu', name=self.name+"-2_10"),
-                layers.Conv2D(10, (2, 5), padding="same", activation='relu', name=self.name+"-2_5"),
-                layers.Conv2D(10, (2, 5), dilation_rate=4, padding="same", activation='relu', name=self.name+"-2_5_dl-4"),
-                layers.Conv2D(10, (2, 10), dilation_rate=4, padding="same", activation='relu', name=self.name+"-2_10_dl-4"),
-                layers.Conv2D(10, (8, 1), padding="same", activation='relu', name=self.name+"-8_1"),            
-                layers.Conv2D(10, (1, 900), padding="same", activation='relu', name=self.name+"-1_900"),
+                layers.Conv2D(self.num_filters, (2, 10), padding="same", activation='relu', name=self.name+"-2_10"),
+                layers.Conv2D(self.num_filters, (2, 5), padding="same", activation='relu', name=self.name+"-2_5"),
+                layers.Conv2D(self.num_filters, (2, 5), dilation_rate=4, padding="same", activation='relu', name=self.name+"-2_5_dl-4"),
+                layers.Conv2D(self.num_filters, (2, 10), dilation_rate=4, padding="same", activation='relu', name=self.name+"-2_10_dl-4"),
+                layers.Conv2D(self.num_filters, (8, 1), padding="same", activation='relu', name=self.name+"-8_1"),            
+                layers.Conv2D(self.num_filters, (1, 900), padding="same", activation='relu', name=self.name+"-1_900"),
                 layers.Dropout(0.2, name=self.name+"-dropout")
                 #layers.LeakyReLU(name=self.name+"-leaky")
         ]
 
 
+
         reduc_layers = [
             layers.MaxPooling2D(pool_size=(2,2), padding="same", name=self.name+"-pool_2_2"),
             layers.MaxPooling2D(pool_size=(1, 6), padding="same", name=self.name+"-pool_1_6"),
-            layers.Conv2D(10, (2, 2), strides=2,  padding="same", activation='relu', name=self.name+"-2_2-strides-2"),
-            layers.Conv2D(10, (1, 6), strides=2,  padding="same", activation='relu', name=self.name+"-1_6-strides-2")
+            layers.Conv2D(self.num_filters, (2, 2), strides=2,  padding="same", activation='relu', name=self.name+"-2_2-strides-2"),
+            layers.Conv2D(self.num_filters, (1, 6), strides=2,  padding="same", activation='relu', name=self.name+"-1_6-strides-2")
         ]
         
         the_dropout_layer = None
@@ -90,12 +92,7 @@ class Block():
         if(self.comb == 'add'):
             self.comb = layers.Add( name = self.name+"_add" )
 
-        
-        #print("cell type: "+str(self.cell_type))
-        #print("op2 : "+str(self.op2))
-        #print("input2 : "+str(self.input2))
-        #print("len inputs: "+str(len(self.inputs)))
-        
+            
         if(self.input1 != None and self.input2 == None): # if input1 set to None, just consider input2
             self.output = (the_layers[self.op1])(self.inputs[self.input1])
         
@@ -105,8 +102,12 @@ class Block():
             self.output = (the_layers[self.op2])(self.inputs[self.input2])
                 
         else:
+            
+            
             self.output = (self.comb)([(the_layers[self.op1])(self.inputs[self.input1]), (the_layers[self.op2])(self.inputs[self.input2])])
-
+            
+            
+            
         #print(self.output)
 
 

@@ -145,9 +145,50 @@ def rew_func_nothing(x):
     return x
 
 def rew_func_exp(x):
-    add=5
-    minus=300
-    return np.exp(add+x) - minus
+    add=0
+    minus=40
+    
+    #return np.exp(add+x)**5 - minus
+    return (np.exp(x)**20) / 800000
+    
+
+
+# inverse of to_categorical
+def out_categorical(y):
+    return [np.argmax(x) for x in y]
+
+# take [1, 1, 0, 1, 0 ..] as input
+def count_pos_class(y):
+    ones = sum(y)
+    total = len(y)
+
+    print(str(ones)+" pos in total, i.e, "+str((ones/total)*100)+" %")
+
+    
+def class_weights(y):
+    ones = sum(y)
+    total = len(y)
+
+    perce = ones/total
+
+    return {0: 1, 1: 1/perce}
+
+def max_accuracies(file):
+
+    # 'accuracies.txt'
+    f = open(file, 'r')
+    lines = f.readlines()
+    accuracies = []
+    for line in lines:
+        accuracies.append(float(line))
+    f.close()
+
+
+    print(max(accuracies))
+
+
+
+
 
 
 
