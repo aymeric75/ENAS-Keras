@@ -2,6 +2,8 @@
 *.png
 *.pbs
 *.pbs.*
+*.h5
+.txt
 total_weights.h5
 __pycache__/
 *core.*
