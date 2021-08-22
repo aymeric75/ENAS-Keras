@@ -58,22 +58,24 @@ def main():
     # Preparation steps #
     #####################
     
-    # 2) best_epochs, plot 'ite' times the val_loss and val_accuracy over 'nb_child_epochs' epochs
-    controller_instance.best_epoch(strategy, global_batch_size, data_options, {0:1 , 1:4}, nb_child_epochs=10, ite=15)
+    class_w = {0:1 , 1:4} # is actually redefined in train_child function (this param should be removed now)
+    
+    # 1) best_epochs, plot 'ite' times the val_loss and val_accuracy over 'nb_child_epochs' epochs
+    controller_instance.best_epoch(strategy, global_batch_size, data_options, class_w, nb_child_epochs=10, ite=15)
     
 
-    # 3) test if eval and final metrics match (on test set)
+    # 2) test if eval and final metrics match (on test set)
     nbre_epochs_child = 4
-    controller_instance.match_train_test_metrics("val_accuracy", "kappa_score", nbre_epochs_child, strategy, global_batch_size, data_options, {0:1 , 1:4})
+    controller_instance.match_train_test_metrics("val_accuracy", "kappa_score", nbre_epochs_child, strategy, global_batch_size, data_options, class_w)
         
         
-    # 4) compute and write accuracies in a file
+    # 3) compute and write accuracies in a file
     callbacks = [tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=3)]
     nbre_epochs_child = 6
     controller_instance.compute_accuracies(350, nbre_epochs_child, strategy, data_options, "", [], global_batch_size, print_file=1)
     
     
-    # 5) test for the number of iterations needed to obtain specific increase
+    # 4) test for the number of iterations needed to obtain specific increase
     controller_instance.test_nb_iterations(file_accs = 'accuracies.txt', inc=0.1, mva1=10, mva2=500, limit=5000)
     
     
@@ -81,9 +83,8 @@ def main():
     #       Training    #
     #####################
     
-    # 6) train the RNN and save its weights in Controller_weights_.h5
+    # 5) train the RNN and save its weights in Controller_weights_.h5
     #callbacks = []
-    #nb_child_epochs = 4  #A CHANGER DANS LES PARAMETRES !!!!!!!!!!!!!!!!!!!!!!!!!!!!  ==============================v
     #controller_instance.train(strategy, global_batch_size, callbacks, rew_func_exp_2, data_options, nb_child_epochs=4, mva1=50, mva2=500, epochs=1200)
     
     # nb_child_epochs=3, mva1=10, mva2=100, epochs=500
@@ -101,7 +102,8 @@ def main():
     controller_instance.children_stats(by_block=0)
     
     
-
+# is actually defined directly in the functions,
+# should be defined outside, like here
 def rew_func_exp_2(x):
     A = 100000
     B = 83000
