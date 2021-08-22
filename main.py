@@ -54,6 +54,10 @@ def main():
     controller_instance = Controller(num_block_conv=num_block_conv, num_block_reduc=num_block_reduc, num_op_conv=7, num_op_reduc=4, num_alt=num_alt, scheme=3, path_train="./data_conv_training.mat", path_test="./data_conv_testing.mat")
         
     
+    #####################
+    # Preparation steps #
+    #####################
+    
     # 2) best_epochs, plot 'ite' times the val_loss and val_accuracy over 'nb_child_epochs' epochs
     controller_instance.best_epoch(strategy, global_batch_size, data_options, {0:1 , 1:4}, nb_child_epochs=10, ite=15)
     
@@ -72,16 +76,26 @@ def main():
     # 5) test for the number of iterations needed to obtain specific increase
     controller_instance.test_nb_iterations(file_accs = 'accuracies.txt', inc=0.1, mva1=10, mva2=500, limit=5000)
     
-    # 6) train the RNN and save its weights in Controller_weights_.h5
     
+    #####################
+    #       Training    #
+    #####################
+    
+    # 6) train the RNN and save its weights in Controller_weights_.h5
     #callbacks = []
     #nb_child_epochs = 4  #A CHANGER DANS LES PARAMETRES !!!!!!!!!!!!!!!!!!!!!!!!!!!!  ==============================v
     #controller_instance.train(strategy, global_batch_size, callbacks, rew_func_exp_2, data_options, nb_child_epochs=4, mva1=50, mva2=500, epochs=1200)
     
     # nb_child_epochs=3, mva1=10, mva2=100, epochs=500
     
+    
+  
+    ###############################
+    #       Testing the results   #
+    ###############################
+    
     # Tests
-    controller_instance.sampling_and_training_one_arch(global_batch_size, data_options, "Controller_weights.h5")
+    #controller_instance.sampling_and_training_one_arch(global_batch_size, data_options, "Controller_weights.h5")
     
     # Display distribution of layers/blocks (Monte Carlo sampling)
     controller_instance.children_stats(by_block=0)
