@@ -27,12 +27,17 @@ class Cell():
     def generateCell(self, blocks_array, type_cell, num_cell):
 
 
+        #x = self.cell_input
+
         outputs = self.cell_inputs
 
         chosen_outputs = []
 
 
         if(self.type_cell=='conv'):
+
+
+
 
             if(self.scheme==1):
                 step=1
@@ -72,6 +77,7 @@ class Cell():
             else:
                 step=3
 
+                # Faut que ça renvoie que
                 for i in range(0, 4, 2):
                     #chosen_outputs.append(blocks_array[i])
                     chosen_outputs.append(int(i/2))
@@ -88,6 +94,10 @@ class Cell():
                     new_block = Block(block_name, input1=int((i+1)/4) + 1, input2=blocks_array[i]+1, op1=blocks_array[i+1], op2=blocks_array[i+2], inputs=outputs, cell_type=self.type_cell, num_cell=num_cell, num_filters=self.num_filters, num_block=int(i/4))
                     new_block.construct()
                     outputs.append(new_block.output)
+
+
+
+
 
         else:
 
@@ -132,6 +142,9 @@ class Cell():
 def main():
 
     return 1
+
+
+
 
 
 

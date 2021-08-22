@@ -56,7 +56,7 @@ class Controller():
     def __init__(self, num_block_conv=2 , num_block_reduc=2, num_op_conv=5, num_op_reduc=2, num_alt=5, scheme=1, path_train="./data_conv_training.mat", path_test="./data_conv_testing.mat"):
 
 
-        self.num_block_conv = num_block_conv      # Number of blocks per conv Cell
+        self.num_block_conv = num_block_conv      # Number of blocks (one block = 2 inputs/2 operators) per conv Cell
 
         self.num_block_reduc = num_block_reduc     # Number of blocks per reduc Cell
 
@@ -66,7 +66,7 @@ class Controller():
 
         self.num_units = 100    # Number of units in the LSTM layer(s)
 
-        self.num_alt = num_alt # Number of times alterning of conv/reduc cell
+        self.num_alt = num_alt # Number of times alterning a conv/reduc cell
 
         self.scheme = scheme
 
@@ -75,7 +75,6 @@ class Controller():
         self.path_test = path_test
 
     # new 'sampling' function, only return an integer (to feed the Embedding layer)
-    # return the 'choice' made by sampling
     def sampling(self, x, depth):
         #x = np.array([[0.1, 0.9]])
         zeros = x*0. ### useless but important to produce gradient
@@ -96,83 +95,99 @@ class Controller():
         # Name for Dense = size of the softmax + i
         x = layers.Dense(num_classes, activation="softmax", name=str(count)+"-"+type_cell+"-"+str(num_classes))(x[0])
 
-        x = ActivityRegularizationLayer()(x) # useful for retrieving Softmaxs outputs during feedforward (see sample_arch function)
+        x = ActivityRegularizationLayer()(x)
 
-        x = layers.Lambda(lambda t: self.sampling(t, depth=num_classes))(x) # sample from the softmax and return an integer (choice)
+        x = layers.Lambda(lambda t: self.sampling(t, depth=num_classes))(x)
 
         x = layers.Embedding(num_classes, 100, trainable=False)(x)
 
         return x # x = LSTM output, rx = reshaped, emb = embedding
 
 
-    # Generate the Mode
+    # Self explainatory...
     def generateController(self):
 
         y_soft, r_y = None, None
+
         controller_input = keras.Input(shape=(1,1,))
+
         outputs = []
+
         input_cell = controller_input
-        array_normal = [] # elements in the Normal cell
-        array_reduc = [] # elements in the Reduc cell
+
+        array_normal = []
+        array_reduc = []
+
         count = 0
 
-        # loop over the number of pairs (Normal_cell/Reduc_cell)
         for i in range(0, self.num_alt):
         
-            # Generate the conv(normal) blocks (of the Normal cell)
+            # Generate the conv blocks
             for j in range(0, self.num_block_conv):
 
-                if ( self.scheme == 1 ): # 1 choice made here (one operation)
-                    
+                if ( self.scheme == 1 ):
+                    # for each block/node, we choose 2 inputs and 2 operations
+
                     if i == 0 and j == 0:
                         _x, _initial = input_cell, True
                     else:
-                        _x, _initial = xx, False
+                        _x, _initial = xx, False # output of previous LSTM_softmax
 
                     _num_classes = self.num_op_conv
 
                     array_normal.append(count)
                     count+=1
                     xx = self.LSTM_softmax(inputs=_x, num_classes=_num_classes, initial=_initial, count=count, type_cell="conv")
+                    #x, rx, emb = self.LSTM_softmax(inputs=_x, num_classes=_num_classes, reshaped_inputs=_rx, initial=_initial)
+
                     outputs.append(xx)
 
-                elif ( self.scheme == 2 ): # 2 + 3 x num_block_conv
+                elif ( self.scheme == 2 ):
 
-                    if ( j < 2 ): # 1st two blocks are just with 1 op / 1 input
+                    if ( j < 2 ):
 
                         if i == 0 and j == 0:
                             _x, _initial = input_cell, True
                         else:
-                            _x, _initial = xx, False
+                            _x, _initial = xx, False # output of previous LSTM_softmax
 
                         _num_classes = self.num_op_conv
 
+                        
                         array_normal.append(count)
                         count+=1
                         xx = self.LSTM_softmax(inputs=_x, num_classes=_num_classes, initial=_initial, count=count, type_cell="conv")
+                        #x, rx, emb = self.LSTM_softmax(inputs=_x, num_classes=_num_classes, reshaped_inputs=_rx, initial=_initial)
+
                         outputs.append(xx)
 
-                    else: # next blocks have at most two inputs (one from previous output, one from ONE of the previous inputS)
+                    else:
+
+                        # choice over one input (the other input is the last one) and one oper 
 
                         for o in ["inputL", "operL"]:
                             
                             if i == 0 and j == 0 and o == "inputL":
                                 _x, _initial = input_cell, True
                             else:
-                                _x, _initial = xx, False
+                                #_x, _rx, _initial = emb, rx, False # output of previous LSTM_softmax
+                                _x, _initial = xx, False # output of previous LSTM_softmax
 
                             if o == "inputL" :
+                                # 1 softmax de taille 2 pour inputL et inputR
                                 _num_classes = j
                             else:
+                                # 1 softmax de taille #num_op
                                 _num_classes = self.num_op_conv
 
                             array_normal.append(count)
                             count+=1
                             xx = self.LSTM_softmax(inputs=_x, num_classes=_num_classes, initial=_initial, count=count, type_cell="conv")
+                            #x, rx, emb = self.LSTM_softmax(inputs=_x, num_classes=_num_classes, reshaped_inputs=_rx, initial=_initial)
 
                             outputs.append(xx)
 
-                elif ( self.scheme == 3 ): # blocks with at most 2 operations (but one input)
+                elif ( self.scheme == 3 ):
 
                     for o in ["operL", "operR"]:
 
@@ -186,12 +201,13 @@ class Controller():
                         array_normal.append(count)
                         count+=1
                         xx = self.LSTM_softmax(inputs=_x, num_classes=_num_classes, initial=_initial, count=count, type_cell="conv")
+                        #x, rx, emb = self.LSTM_softmax(inputs=_x, num_classes=_num_classes, reshaped_inputs=_rx, initial=_initial)
                         outputs.append(xx)
 
-                else: # scheme == 4, blocks with at most 2 inputs and 2 operations
+                else: # scheme == 4
 
                     
-                    if ( j < 2 ): # 1st two blocks with 1 op, 1 input only
+                    if ( j < 2 ):
 
                         for o in ["operL", "operR"]:
 
@@ -205,38 +221,44 @@ class Controller():
                             array_normal.append(count)
                             count+=1
                             xx = self.LSTM_softmax(inputs=_x, num_classes=_num_classes, initial=_initial, count=count, type_cell="conv")
+                            #x, rx, emb = self.LSTM_softmax(inputs=_x, num_classes=_num_classes, reshaped_inputs=_rx, initial=_initial)
                             outputs.append(xx)
                         
-                    else: #  next blocks with at most 2 inputs and 2 ops
+                    else:
 
                         for o in ["inputL", "operL", "operR"]:
 
                             if i == 0 and j == 0 and o == "inputL":
                                 _x, _initial = input_cell, True
                             else:
+                                #_x, _rx, _initial = emb, rx, False # output of previous LSTM_softmax
                                 _x, _initial = xx, False # output of previous LSTM_softmax
 
                             if o == "inputL" :
+                                # 1 softmax de taille 2 pour inputL et inputR
                                 _num_classes = j
                             else:
+                                # 1 softmax de taille #num_op
                                 _num_classes = self.num_op_conv
 
                             array_normal.append(count)
                             count+=1
                             xx = self.LSTM_softmax(inputs=_x, num_classes=_num_classes, initial=_initial, count=count, type_cell="conv")
+                            #x, rx, emb = self.LSTM_softmax(inputs=_x, num_classes=_num_classes, reshaped_inputs=_rx, initial=_initial)
                             outputs.append(xx)
 
 
             # Generate the reduc blocks
             for j in range(0, self.num_block_reduc):
 
-                _x, _initial = xx, False
+                _x, _initial = xx, False # output of previous LSTM_softmax
 
                 _num_classes = self.num_op_reduc
 
                 array_reduc.append(count)
                 count+=1
                 xx = self.LSTM_softmax(inputs=_x, num_classes=_num_classes, initial=_initial, count=count, type_cell="reduc")
+                #x, rx, emb = self.LSTM_softmax(inputs=_x, num_classes=_num_classes, reshaped_inputs=_rx, initial=_initial)
                 outputs.append(xx)
 
         model = Model(inputs=controller_input, outputs=outputs)
@@ -247,21 +269,25 @@ class Controller():
 
     
     
-    # return the compiled child model
+    
     def get_compiled_cnn_model(self, cells_array):
+
 
         # Init of the child net
         outputs = []
-        
-        # static part
         input_shape = (8, 900, 1)
         inputs = keras.Input(shape=(8, 900), name="outside_input")
         x = layers.Reshape((8,900,1), name="outside_reshape")(inputs)
+        #outputs.append(x)
         x = layers.BatchNormalization(name="outside_batchnorm")(x)
+        #outputs.append(x)
+        #x = layers.Conv2D(10, (2, 10), padding="same", activation='relu', name="outside_conv2")(x)
         outputs.append(x)
         
-        # loop over the cells and construct the model  (dynamic part)
+        
+        # loop over the cells and construct the model
         for i, arr in enumerate(cells_array):
+
 
             if(i>0):
                 outputs = [x]
@@ -281,7 +307,6 @@ class Controller():
                 cell.generateCell(blocks_array, 'reduc', num_cell=i)
                 x = cell.cell_output
 
-        # static part
         x = layers.Flatten(name="outside_flatten")(x)
         x = layers.BatchNormalization(name="outside_batchnorm2")(x)
         x = layers.Dropout(0.25, name="outside_droupout1")(x)
@@ -293,7 +318,12 @@ class Controller():
         
         model = keras.Model(inputs=inputs, outputs=outputss, name="ansari_model")
         utils.plot_model(model, to_file="child.png")
+
+        # metrics=['acc',f1_m,precision_m, recall_m]
+        # Compute the accuracy
+        #acc = tf.keras.metrics.BinaryAccuracy(name="binary_accuracy", dtype=None, threshold=0.3)
         loss = keras.losses.CategoricalCrossentropy()
+        # f1_m, precision_m, recall_m,tfa.metrics.CohenKappa(num_classes=2)
         model.compile(loss=loss, optimizer=keras.optimizers.Adam(1e-3), metrics=["accuracy"])
         
         return model
@@ -301,16 +331,18 @@ class Controller():
 
 
     def load_shaped_data_train(self, random=0, seed=0):
-        
+
         if(seed==1):
             np.random.seed(10)
 
         if(random==1):
+
             X = np.random.rand(10000,8,900)
             y = np.random.choice(2, 10000)
             y = keras.utils.to_categorical(y, num_classes=2)
             
         else:
+
             loaded = load_data(self.path_train, self.path_test, clip_value=300)
             X = loaded[0].transpose((0,2,1)) # eeg training
             y = loaded[1] 
@@ -325,18 +357,18 @@ class Controller():
     def load_shaped_data_test(self):
 
         loaded = load_data("./data_conv_training.mat", "./data_conv_testing.mat",clip_value=300)
+
         X_test = loaded[2].transpose((0,2,1))
         y_test = loaded[3]
             
         return X_test, y_test        
 
 
-    # sample a child architecture from the controller
+
     def sample_arch(self, controller, array_normal, array_reduc):
 
-        
-        len_normale = int(len(array_normal)/self.num_alt) # number of elements in a Normal cell
-        len_reduc = int(len(array_reduc)/self.num_alt) # number of elements in a Reduction cell
+        len_normale = int(len(array_normal)/self.num_alt)
+        len_reduc = int(len(array_reduc)/self.num_alt)
 
         # FEEDFORWARD
         inp = controller.input  # input placeholder
@@ -345,11 +377,15 @@ class Controller():
         test = np.random.random((1,1))[np.newaxis,...]
         layer_outs = functor([test]) # Here are all the outputs of all the layers
 
-        
-        cells_array = [] # FINAL ARRAY of all blocks/cells
+        # sum over the hyperparameters (i.e, over the choices made my the RNN)
+
+        # final array of all blocks/cells
+        cells_array = []
+
         cell1 = [] # tmp array for conv cells
         cell2 = [] # tmp array for reduc cells
-        sum_proba = 0 # sum of probas of all choices (needed for REINFORCE)
+
+        sum_proba = 0
 
         ###################
         # MAKING CHILD ARCH
@@ -358,29 +394,36 @@ class Controller():
         # loop over each layer (choice)
         for i in range(0, len(layer_outs), 2): # 2 because there is this Lambda layer also
 
-            classe = layer_outs[i+1][0][0] # class of the current choice
-            proba = controller.losses[int(i/2)][0][0][classe] # proba of the current choice
+            classe = layer_outs[i+1][0][0]
+
+            proba = controller.losses[int(i/2)][0][0][classe]
             sum_proba -= tf.math.log(proba)
 
             if( int(i/2) in array_normal):
 
+                
                 if ( len(cell1) < len_normale ):  # 
                     cell1.append(classe)
+
                 if ( len(cell1) == len_normale ):
                     cells_array.append(cell1)
                     cell1 = []
+
             else:
+
                 if ( len(cell2) < len_reduc ):  # 
                     cell2.append(classe)
+
                 if ( len(cell2) == len_reduc ):
                     cells_array.append(cell2)
                     cell2 = []
-        
+
+
         return cells_array, sum_proba
 
 
 
-    # training of the child
+
     def train_child(self, X, y, model, batch_size, epochs_child, options, callbacks, class_w):
                     
 
@@ -417,7 +460,6 @@ class Controller():
         return history     
 
 
-    # training of the controller
     def train(self, strategy, global_batch_size, callbacks, rew_func, data_options, nb_child_epochs=2, mva1=10, mva2=500, epochs=5):
       
         
@@ -438,8 +480,8 @@ class Controller():
         dico_archs = {}  # each key is a hash of the array representing the arch
                          # each value is the corresponding accuracy (max acc so far...)
         
-
-        # total_weights = total weights of the children, stored so far
+        #print('Number of devices: {}'.format(strategy.num_replicas_in_sync))
+        
         if os.path.exists("total_weights.h5"):
             os.remove("total_weights.h5")
         if os.path.exists("tmp_weights.h5"):
@@ -455,6 +497,8 @@ class Controller():
         
         start = time.time()
 
+        
+
         # Loop over the epochs
         for epoch in range(epochs):
 
@@ -468,6 +512,8 @@ class Controller():
                 for s in range(sampling_number):
 
                     val_acc = tf.Variable(0)
+                    
+                    
 
                     # Tries to generate a valid ARCH
                     no_valid = True
@@ -487,6 +533,7 @@ class Controller():
                     # load existing weights ENAS !!!!!!!!!!!
                     model.load_weights("total_weights.h5", by_name=True)
                     
+        
                     # !!!!!!!!!!!!! BEST OPTION !!!!!!!!!!!
                     model_checkpoint_callback = tf.keras.callbacks.ModelCheckpoint(
                         filepath='tmp_weights.h5',
@@ -555,10 +602,6 @@ class Controller():
                             val_acc_max = dico_archs[hash_]
                             # ENAS !!!!
 
-                            
-                    # HERE is where the Reward function is set
-                    # but should be set in the function parameters
-                            
                     A = 1000
                     B = 840
 
@@ -571,12 +614,40 @@ class Controller():
 
                         
                     all_accs_rews.append(acc_rew)
+                    #acc_rew = rew_func(val_acc_max)
+                    #acc_rew = val_acc_max
                     accuracies.append(val_acc_max)
 
-                            
-                    # Plot of mva1 and mva2
+                    
+                    """
+                    if(cells_array == [[1, 2], [0]]):
+                      
+                        fig, (ax1, ax2) = plt.subplots(1, 2)
+                        ax1.set_xlabel('epochs')
+                        ax2.set_xlabel('epochs')
+                        ax1.set_ylabel('val_accuracy')
+                        ax2.set_ylabel('val_loss')
+                        
+                        
+                        print("cells_array INSIDE = "+str([[1, 2], [0]]))
+                
+                        val_accuracies = history.history['val_accuracy']
+                        val_losses = history.history['val_loss']
+  
+                        plt.setp((ax1, ax2), xticks=np.arange(0, len(val_accuracies), 1))
+                       
+                        nbre_epochs = range(len(val_accuracies))
+                        ax1.plot(nbre_epochs, val_accuracies, linestyle='-', color='b')
+                        ax2.plot(nbre_epochs, val_losses, linestyle='-', color='r')
+
+                        fig.tight_layout(pad=5.0)
+                        plt.savefig("accuracy_loss_child_"+str(epoch)+".png")
+                        plt.close()
+                    """
+                                        
                     ema = 0
                     if (len(accuracies) > mva1):
+                        print("here1")
                         means_mva1.append(mean(accuracies[-mva1:]))
                         ema = moving_average(accuracies, mva1, type='exponential')
                         f = open("log_Controller_ema.txt", "a")
@@ -590,7 +661,11 @@ class Controller():
                             plt.ylabel("accuracy (mva "+str(mva1)+")")
                             plt.savefig('incre_mva1_controller.png')
                         
+
+                        
+                        
                     if( len(accuracies) > mva2 ):
+                        print("here2")
                         means_mva2.append(mean(accuracies[-mva2:]))
                         if(epoch % 10):
                             plt.figure()
@@ -600,18 +675,14 @@ class Controller():
                             plt.savefig('incre_mva2_controller.png')            
                     
                     
-                    
-                    
                     total_sum *= ( acc_rew )
                     del model
 
                 total_sum/=sampling_number
                 
-            # controller weights update
             grads = tape.gradient(total_sum, controller.trainable_weights)
             optimizer.apply_gradients(zip(grads, controller.trainable_weights))
 
-            # save controller weights
             if( len(accuracies) > mva1 ):
                 if(max(means_mva1) == means_mva1[-1]):
                     controller.save_weights("Controller_weights.h5")
@@ -619,16 +690,15 @@ class Controller():
         total_weights.close()
 
 
-      
-    ####################
-    # MEASUREMENT TOOLS#
-    ####################
+
+    # MEASUREMENT TOOLS
+
 
     def search_space_size(self):
         
         return self.num_alt*self.num_block_conv*self.num_block_reduc*self.num_op_conv*self.num_op_reduc
         
-       
+        
 
     def best_epoch(self, strategy, global_batch_size, data_options, class_w, nb_child_epochs = 20, ite=10):
         
@@ -729,6 +799,7 @@ class Controller():
 
     # check if the train_metric (used during training of each child)
     # "follows" the "final" metrics (kappa score), ie, on the test set
+    #
     
     def match_train_test_metrics(self, train_metric, test_metric, nb_child_epochs, strategy, global_batch_size, data_options, class_w):
 
@@ -872,9 +943,12 @@ class Controller():
         
         dico_archs = {}  # each key is a hash of the array representing the arch
                          # each value is the corresponding accuracy (mean acc)
-
+        
+        
         # print dico
         print(dico)
+        
+        
         
         # display search space size
         print(self.search_space_size())
@@ -982,9 +1056,9 @@ class Controller():
         
         return
         
-    # compute and store 'nber' accuracies
+    # compute and store nber accuracies
     # in file accuracies.txt
-    # and displays stats about time it will take for 5000 iterations
+    # and displays stats
     def compute_accuracies(self, nber, nb_child_epochs, strategy, options, weights="Controller_weights_.h5", callbacks = [], global_batch_size=64, print_file=0):
 
         
@@ -1088,15 +1162,14 @@ class Controller():
         
         
 
-    # shows the ditribution of blocks or layers (by_blocks=0) 
-    # in 'limit' children (Monte Carlo sampling)
+
     def children_stats(self, by_block=1):
                 
         controller, array_normal, array_reduc = self.generateController()
         
         count_iter = 0
         
-        limit = 100
+        limit = 5
 
         dico = {}
        
@@ -1238,6 +1311,7 @@ class Controller():
         if(len(callbacks)>0):
             call = callbacks
 
+
         history = model.fit(
                 train_data,
                 validation_data=val_data,
@@ -1249,9 +1323,11 @@ class Controller():
                 #validation_split=0.1
             )
 
+
         return history     
 
-    # 10-cross validation training of a child, retain best weights (<=> best Kappa with moving average)
+    
+    
     def cross_val_training(self, model, X, y, X_test, y_test, global_batch_size, data_options, num_stack):
 
         best_kappa_av = None
@@ -1318,9 +1394,9 @@ class Controller():
             print("num_stack "+str(num_stack)+", best_kappa_av "+str(best_kappa_av))
 
     
-    # stack and train a pair of Normal/Reduction train
-    # stacks up to 3 pairs
+    
     def sampling_and_training_one_arch(self, global_batch_size, data_options, weights=""):
+        
         
         controller, array_normal, array_reduc = self.generateController()
         
@@ -1340,6 +1416,7 @@ class Controller():
             # construct a model with s+1 stacked pairs of cells
             model = self.get_compiled_cnn_model_extended(cells_array, s+1, 10)
             
+            
             # train the model 
             model.summary()
 
@@ -1350,11 +1427,10 @@ class Controller():
             X, y = self.load_shaped_data_train(random=0, seed=0)
 
             # LOAD TEST DATAS
-            #self.cross_val_training(model, X, y, X_test, y_test, global_batch_size, data_options, s+1)
             X_test, y_test = self.load_shaped_data_test()
             
-            
-           
+            self.cross_val_training(model, X, y, X_test, y_test, global_batch_size, data_options, s+1)
+
             
             
         
