@@ -1,5 +1,6 @@
 # ENAS-Keras
-Implementation of Efficient Neural Architecture Search with Keras
+Implementation of Efficient Neural Architecture Search with Keras, based on my Master thesis "Learning to learn: automatic design of neural network architectures
+for biomedical signal processing tasks"
 
 
 ## Block.py
